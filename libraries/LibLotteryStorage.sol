@@ -61,4 +61,5 @@ library LibLotteryStorage {
             ls.slot := position
         }
     }
+
 }
