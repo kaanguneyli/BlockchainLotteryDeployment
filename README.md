@@ -11,3 +11,14 @@ REPORT_GAS=true npx hardhat test
 npx hardhat node
 npx hardhat ignition deploy ./ignition/modules/Lock.js
 ```
+
+
+
+First connect to the node,  then deploy the diamond. 
+
+```
+npx hardhat node
+npx hardhat run scripts/deploy.js --network localhost
+```
+
+Then you need to get the addresses of the facets from the node and paste it to the frontend. 

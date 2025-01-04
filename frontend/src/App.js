@@ -8,6 +8,10 @@ import AdminFacetABI from './ABIs/AdminFacet.json';
 import LotteryFacetABI from './ABIs/LotteryFacet.json';
 import QueryFacetABI from './ABIs/QueryFacet.json';
 
+const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
+const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
+const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
+
 function App() {
   const [web3, setWeb3] = useState(null);
   const [adminFacet, setAdminFacet] = useState(null);
@@ -55,12 +59,11 @@ function App() {
           setAccount(accounts[0]);
 
           // Diamond contract address
-          const diamondAddress = process.env.PRIVATE_KEY;
-
+          
           // Creating contract instances using the Diamond contract address
-          const adminFacetInstance = new web3Instance.eth.Contract(AdminFacetABI, diamondAddress);
-          const lotteryFacetInstance = new web3Instance.eth.Contract(LotteryFacetABI, diamondAddress);
-          const queryFacetInstance = new web3Instance.eth.Contract(QueryFacetABI, diamondAddress);
+          const adminFacetInstance = new web3Instance.eth.Contract(AdminFacetABI, LOTTERY_FACET_ADDRESS );
+          const lotteryFacetInstance = new web3Instance.eth.Contract(LotteryFacetABI, LOTTERY_FACET_ADDRESS);
+          const queryFacetInstance = new web3Instance.eth.Contract(QueryFacetABI, QUERY_FACET_ADDRESS);
 
           setAdminFacet(adminFacetInstance);
           setLotteryFacet(lotteryFacetInstance);
@@ -93,7 +96,7 @@ function App() {
           noofwinners,
           minpercentage,
           web3.utils.toWei(ticketprice, 'ether'),
-          htmlhash,
+          web3.utils.asciiToHex(htmlhash),
           url
         ).send({ from: account });
         console.log('Lottery created');
