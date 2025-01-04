@@ -1,78 +1,102 @@
-const { ethers } = require("hardhat");
-const fs = require("fs");
+/* global ethers */
+/* eslint prefer-const: "off" */
 
-async function saveDeploymentInfo(addresses) {
-    const filePath = "./deployedAddresses.json";
-    const data = JSON.stringify(addresses, null, 2);
-    fs.writeFileSync(filePath, data, { flag: "w" });
-    console.log("Deployment info saved to deployedAddresses.json");
-}
+const { getSelectors, FacetCutAction } = require("./libraries/diamond.js");
 
-async function main() {
-    console.log("Starting deployment...");
-    const deploymentAddresses = {};
+async function deployDiamond(flag) {
+  const accounts = await ethers.getSigners();
+  const contractOwner = accounts[0];
 
-    // List of facets to deploy
-    const facets = ["DiamondLoupeFacet", "OwnershipFacet", "LotteryFacet", "AdminFacet", "QueryFacet"];
+  // Deploy DiamondCutFacet
+  console.log("Deploying DiamondCutFacet...");
+  const DiamondCutFacet = await ethers.getContractFactory("DiamondCutFacet");
+  const diamondCutFacet = await DiamondCutFacet.deploy();
+  await diamondCutFacet.waitForDeployment();
+  if (flag === "log") console.log("DiamondCutFacet deployed:", diamondCutFacet.address);
 
-    // Deploy DiamondCutFacet
-    console.log("Deploying DiamondCutFacet...");
-    const DiamondCutFacetFactory = await ethers.getContractFactory("DiamondCutFacet");
-    const diamondCutFacet = await DiamondCutFacetFactory.deploy();
-    await diamondCutFacet.waitForDeployment();
-    deploymentAddresses.DiamondCutFacet = diamondCutFacet.target;
-    console.log("DiamondCutFacet deployed to:", diamondCutFacet.target);
+  // Deploy Diamond
+  console.log("Deploying Diamond...");
+  const Diamond = await ethers.getContractFactory("Diamond");
+  const diamond = await Diamond.deploy(contractOwner.address, diamondCutFacet.address);
+  await diamond.waitForDeployment();
+  if (flag === "log") console.log("Diamond deployed:", diamond.address);
 
-    // Deploy Diamond
-    console.log("Deploying Diamond...");
-    const [owner] = await ethers.getSigners();
-    const args = {
-        owner: owner.address,
-        init: ethers.ZeroAddress,
-        initCalldata: "0x",
-    };
-    const DiamondFactory = await ethers.getContractFactory("Diamond");
-    const diamond = await DiamondFactory.deploy([], args);
-    await diamond.waitForDeployment();
-    deploymentAddresses.Diamond = diamond.target;
-    console.log("Diamond deployed to:", diamond.target);
+  // Deploy DiamondInit
+  console.log("Deploying DiamondInit...");
+  const DiamondInit = await ethers.getContractFactory("DiamondInit");
+  const diamondInit = await DiamondInit.deploy();
+  await diamondInit.waitForDeployment();
+  if (flag === "log") console.log("DiamondInit deployed:", diamondInit.address);
 
-    // Deploy and Attach Facets
-    const diamondCut = [];
+  // Deploy Facets
+  console.log("\nDeploying facets...");
+  const FacetNames = [
+    "DiamondLoupeFacet",
+    "OwnershipFacet",
+    "LotteryFacet",
+    "TicketFacet",
+    "Query"
+];
+const cut = [];
+const selectors = new Set(); // Define selectors set here
+for (const FacetName of FacetNames) {
+  const Facet = await ethers.getContractFactory(FacetName);
+  let facet;
+  if (FacetName === "TestTokenFacet") {
+    facet = await Facet.deploy(1000000); // Provide the initial supply argument
+  } else {
+    facet = await Facet.deploy();
+  }
+  await facet.deployed();
+  if (flag === "log") console.log(`${FacetName} deployed: ${facet.address}`);
 
-    for (const facetName of facets) {
-        console.log(`Deploying ${facetName}...`);
-        const FacetFactory = await ethers.getContractFactory(facetName);
-        const facet = await FacetFactory.deploy();
-        await facet.waitForDeployment();
-        console.log(`${facetName} deployed to:`, facet.target);
-        deploymentAddresses[facetName] = facet.target;
-
-        const selectors = facet.interface.functions
-            ? Object.keys(facet.interface.functions).map(fn => facet.interface.getSighash(fn))
-            : [];
-        console.log(`Selectors for ${facetName}:`, selectors);
-
-        diamondCut.push({
-            facetAddress: facet.target,
-            action: 0, // Add action
-            functionSelectors: selectors,
-        });
+  const facetSelectors = getSelectors(facet);
+  const uniqueSelectors = [];
+  for (const selector of facetSelectors) {
+    if (selectors.has(selector)) {
+      console.error(
+        `Duplicate function selector found: ${selector} in ${FacetName}`
+      );
+    } else {
+      selectors.add(selector);
+      uniqueSelectors.push(selector);
     }
+  }
 
-    console.log("Adding facets to the Diamond contract...");
-    const diamondCutFacetInstance = await ethers.getContractAt("DiamondCutFacet", diamond.target);
-    const tx = await diamondCutFacetInstance.diamondCut(diamondCut, ethers.ZeroAddress, "0x");
-    await tx.wait();
-    console.log("All facets added successfully.");
-
-    // Save deployment info
-    await saveDeploymentInfo(deploymentAddresses);
+  cut.push({
+    facetAddress: facet.address,
+    action: FacetCutAction.Add,
+    functionSelectors: getSelectors(facet),
+  });
 }
 
-main()
+// upgrade diamond with facets
+if (flag === "log") console.log("");
+if (flag === "log") console.log("Diamond Cut:", cut);
+const diamondCut = await ethers.getContractAt("IDiamondCut", diamond.address);
+let tx;
+let receipt;
+// call to init function
+let functionCall = diamondInit.interface.encodeFunctionData("init");
+tx = await diamondCut.diamondCut(cut, diamondInit.address, functionCall);
+if (flag === "log") console.log("Diamond cut tx: ", tx.hash);
+receipt = await tx.wait();
+if (!receipt.status) {
+  throw Error(`Diamond upgrade failed: ${tx.hash}`);
+}
+if (flag === "log") console.log("Completed diamond cut");
+return diamond.address;
+}
+
+// We recommend this pattern to be able to use async/await everywhere
+// and properly handle errors.
+if (require.main === module) {
+  deployDiamond("log")
     .then(() => process.exit(0))
     .catch((error) => {
-        console.error("Error during deployment:", error);
-        process.exit(1);
+      console.error(error);
+      process.exit(1);
     });
+}
+
+exports.deployDiamond = deployDiamond;
