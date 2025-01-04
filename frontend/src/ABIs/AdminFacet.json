@@ -1,0 +1,100 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_user",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_contractOwner",
+        "type": "address"
+      }
+    ],
+    "name": "NotContractOwner",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "lottery_no",
+        "type": "uint256"
+      }
+    ],
+    "name": "LotteryCreated",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "unixEnd",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nooftickets",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "noofwinners",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "minpercentage",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "ticketprice",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "htmlhash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "url",
+        "type": "string"
+      }
+    ],
+    "name": "createLottery",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "ercTokenAddr",
+        "type": "address"
+      }
+    ],
+    "name": "setPaymentToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "lottery_no",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdrawTicketProceeds",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
