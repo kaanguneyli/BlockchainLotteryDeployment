@@ -3,14 +3,20 @@ import Web3 from 'web3';
 import logo from './logo.svg';
 import './App.css';
 
+import { ethers } from 'ethers';
+
 // Import ABIs
 import AdminFacetABI from './ABIs/AdminFacet.json';
 import LotteryFacetABI from './ABIs/LotteryFacet.json';
 import QueryFacetABI from './ABIs/QueryFacet.json';
 
-const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
+/* const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
 const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
+ */
+
+const DIAMOND_address = '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512';
+
 
 function App() {
   const [web3, setWeb3] = useState(null);
@@ -53,7 +59,7 @@ function App() {
   const [showGetPaymentToken, setShowGetPaymentToken] = useState(false);
   const [showGetStartTime, setShowGetStartTime] = useState(false);
 
-  useEffect(() => {
+/*   useEffect(() => {
     // Function to connect to MetaMask
     const connectMetaMask = async () => {
       if (window.ethereum) {
@@ -90,37 +96,100 @@ function App() {
     };
 
     connectMetaMask();
-  }, []);
+  }, []); */
+
+  const getLotteryContract = async () => {
+    if (!window.ethereum) throw new Error("Metamask is not installed");
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+
+    // Await the network validation to ensure it's on the correct network
+    const network = await provider.getNetwork();
+    if (network.chainId !== 31337) {
+      alert(
+        "Please switch MetaMask to Hardhat Localhost Network (Chain ID 31337)"
+      );
+      throw new Error("Incorrect network");
+    }
+    const adminFacetInstance=  new ethers.Contract(DIAMOND_address, AdminFacetABI, signer);
+    const lotteryFacetInstance = new ethers.Contract(DIAMOND_address, LotteryFacetABI, signer);
+    const queryFacetInstance = new ethers.Contract(DIAMOND_address, QueryFacetABI, signer);
+    setAdminFacet(adminFacetInstance);
+    setLotteryFacet(lotteryFacetInstance);
+    setQueryFacet(queryFacetInstance);
+
+    console.log('AdminFacet:', adminFacetInstance);
+    console.log('LotteryFacet:', lotteryFacetInstance);
+    console.log('QueryFacet:', queryFacetInstance);
+    console.log(await adminFacetInstance.functions);
+    return { adminFacetInstance, lotteryFacetInstance, queryFacetInstance };
+
+
+  };
+
+  useEffect(() => {
+    getLotteryContract();
+  }
+  , []);
+
+
 
   // Functions to interact with the contracts
   const createLottery = async () => {
-    const { unixEnd, nooftickets, noofwinners, minpercentage, ticketprice, htmlhash, url } = lotteryParams;
-    if (adminFacet && account) {
+    const {adminFacetInstance, lotteryFacet, queryFacet} = await getLotteryContract();
+
+    const { unixEnd, nooftickets, noofwinners, minpercentage, ticketprice, htmlhash, url } = {
+      unixEnd: Math.floor(Date.now()/1000) + 3600, // 1 hour from now
+      nooftickets: 100,
+      noofwinners: 3,
+      minpercentage: 50,
+      ticketprice: "0.1",
+      htmlhash: "test",
+      url: "https://example.com"
+    };
+    if (adminFacet ) {
       try {
+        const unixEnd = Math.floor(Date.now() / 1000) + 3600; // End time (1 hour from now)
+        const nooftickets = 100; // Number of tickets
+        const noofwinners = 5; // Number of winners
+        const minpercentage = 10; // Minimum percentage
+        const ticketprice = ethers.utils.parseEther("0.05"); // Ticket price in ETH
+        const htmlhash = ethers.utils.formatBytes32String("example_hash"); // Example hash
+        const url = "https://example.com/lottery"; // Lottery URL
         console.log('Creating lottery...');
-        await adminFacet.methods.createLottery(
-          unixEnd,
-          nooftickets,
-          noofwinners,
-          minpercentage,
-          web3.utils.toWei(ticketprice, 'ether'),
-          web3.utils.padRight(web3.utils.asciiToHex(htmlhash), 64),
-          url
-        ).send({ from: account });
+        console.log(adminFacet);
+
+        const tx = await adminFacet.createLottery(
+            unixEnd,
+            nooftickets,
+            noofwinners,
+            minpercentage,
+            ticketprice,
+            htmlhash,
+            url,
+            { gasLimit: 500000 }
+        );
+        console.log("Transaction sent, waiting for confirmation...");
+
+        await tx.wait();
         console.log('Lottery created');
       } catch (error) {
         console.error('Error creating lottery:', error);
       }
     } else {
+      console.log('AdminFacet contract or account is not set');
+      console.log('AdminFacet:', adminFacet);
       console.error('AdminFacet contract or account is not set');
     }
   };
 
   const setPaymentToken = async () => {
-    if (adminFacet && account) {
+    if (adminFacet) {
       try {
         console.log('Setting payment token...');
-        await adminFacet.methods.setPaymentToken(tokenAddress).send({ from: account });
+        
+        const tx = await adminFacet.setPaymentToken(tokenAddress);
         console.log('Payment token set');
       } catch (error) {
         console.error('Error setting payment token:', error);
