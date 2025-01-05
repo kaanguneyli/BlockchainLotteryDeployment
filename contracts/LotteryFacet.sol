@@ -2,11 +2,15 @@
 pragma solidity ^0.8.0;
 
 import "../libraries/LibLotteryStorage.sol";
+import "./diamond/contracts/libraries/LibDiamond.sol";
+
 
 contract LotteryFacet {
     event TicketPurchased(uint indexed lottery_no, uint sticketno, address indexed buyer, uint quantity);
     event WinnersAnnounced(uint indexed lottery_no, uint winningTicket);
     event WinningsClaimed(uint indexed lottery_no, address indexed winner, uint amount);
+    event LotteryCreated(uint indexed lottery_no);
+
 
     function buyTicketTx(uint lottery_no, uint quantity, bytes32 hash_rnd_number) external {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
@@ -177,4 +181,145 @@ contract LotteryFacet {
         uint refundAmount = ticket.quantity * lottery.details.ticketprice;
         require(lottery.details.paymentToken.transfer(msg.sender, refundAmount), "Refund failed");
     }
+
+    function createLottery(
+        uint unixEnd,
+        uint nooftickets,
+        uint noofwinners,
+        uint minpercentage,
+        uint ticketprice,
+        bytes32 htmlhash,
+        string memory url
+    ) external {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(unixEnd > block.timestamp, "End time must be in the future");
+        require(minpercentage >= 0 && minpercentage <= 100, "Invalid percentage");
+
+        uint lotteryNo = ++ls.lotteryCount;
+        LibLotteryStorage.Lottery storage lottery = ls.lotteries[lotteryNo];
+
+        lottery.details.startTime = block.timestamp;
+        lottery.details.unixEnd = unixEnd;
+        lottery.details.totalTickets = nooftickets;
+        lottery.details.winnersCount = noofwinners;
+        lottery.details.minpercentage = minpercentage;
+        lottery.details.ticketprice = ticketprice;
+        lottery.details.htmlhash = htmlhash;
+        lottery.details.url = url;
+
+        lottery.status.isCancelled = true;
+        lottery.status.ticketsSold = 0;             // gpt yazmamıştı
+        lottery.status.cumulativeRandomness = 0;    // gpt yazmamıştı
+
+        emit LotteryCreated(lotteryNo);
+    }
+
+    /**
+     * @dev Sets the payment token for the lottery system.
+     * Only callable by the contract owner.
+     */
+    function setPaymentToken(address ercTokenAddr) external {
+        LibDiamond.enforceIsContractOwner(); // Ensure only the owner can call this function
+        require(ercTokenAddr != address(0), "Invalid token address");
+
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        ls.paymentToken = IERC20(ercTokenAddr);
+
+        // emit PaymentTokenSet(ercTokenAddr);
+    }
+
+    /**
+     * @dev Withdraws proceeds from a completed lottery.
+     * Only callable by the contract owner.
+     */
+    function withdrawTicketProceeds(uint lottery_no) external {
+        LibDiamond.enforceIsContractOwner(); // Ensure only the owner can call this function
+
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+
+        LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
+
+        require(block.timestamp >= lottery.details.unixEnd, "Lottery not ended");
+        require(!lottery.status.isCancelled, "Lottery was cancelled");
+
+        uint proceeds = lottery.status.ticketsSold * lottery.details.ticketprice;
+        require(ls.paymentToken.transfer(msg.sender, proceeds), "Withdrawal failed");
+
+        // emit ProceedsWithdrawn(lottery_no, proceeds);
+    }
+
+    function getLotteryCount() public view returns (uint) {
+    LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+    return ls.lotteryCount;
+    }
+
+    function getNumPurchaseTxs(uint lottery_no) public view returns (uint) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+        return ls.lotteries[lottery_no].status.purchases.length;
+    }
+
+    function getIthPurchasedTicketTx(uint i, uint lottery_no) public view returns (uint sticketno, uint quantity) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+        require(i > 0 && i - 1 < ls.lotteries[lottery_no].status.purchases.length, "Invalid ticket index");
+
+        LibLotteryStorage.Purchase storage purchase = ls.lotteries[lottery_no].status.purchases[i - 1];
+        return (purchase.sticketno, purchase.quantity);
+    }
+
+    function getIthWinningTicket(uint lottery_no, uint i) public view returns (uint ticketNo) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+
+        LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
+        require(block.timestamp >= lottery.details.unixEnd, "Lottery not ended");
+        require(!lottery.status.isCancelled, "Lottery cancelled");
+        require(i < lottery.status.winners.length, "Invalid winner index");
+
+        return lottery.status.winners[i].ticket_no;
+    }
+
+    function getLotterySales(uint lottery_no) public view returns (uint) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+
+        return ls.lotteries[lottery_no].status.ticketsSold;
+    }
+
+    function getStartTime(uint lottery_no) external view returns (uint) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+
+        return ls.lotteries[lottery_no].details.startTime;
+    }
+
+    function getPaymentToken() external view returns (address) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        return address(ls.paymentToken);
+    }
+
+    function getLotteryInfo(uint lottery_no) public view returns (uint, uint, uint, uint, uint) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+
+        LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
+        return (
+            lottery.details.startTime,
+            lottery.details.totalTickets,
+            lottery.details.winnersCount,
+            lottery.details.minpercentage,
+            lottery.details.ticketprice
+        );
+    }
+
+    function getLotteryURL(uint lottery_no) public view returns (bytes32, string memory) {
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
+
+        LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
+        return (lottery.details.htmlhash, lottery.details.url);
+    }
 }
+
