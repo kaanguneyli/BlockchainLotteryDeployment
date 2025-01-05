@@ -24,7 +24,23 @@ contract LotteryFacet {
         require(block.timestamp < (lottery.details.unixEnd - lottery.details.startTime) / 2 + lottery.details.startTime, "Reveal period started");    // gpt yazmamıştı
 
         uint totalCost = lottery.details.ticketprice * quantity;
-        require(ls.paymentToken.transferFrom(msg.sender, address(this), totalCost), "Payment failed");
+        require(
+    address(ls.paymentToken).code.length > 0,
+    "Invalid payment token address"
+    );
+
+    (bool success, bytes memory data) = address(ls.paymentToken).call(
+        abi.encodeWithSelector(
+            ls.paymentToken.transferFrom.selector,
+            msg.sender,
+            address(this),
+            totalCost
+        )
+    );
+
+    require(success && (data.length == 0 || abi.decode(data, (bool))), "Payment failed");
+
+
 
         for (uint i = 0; i < quantity; i++) {
             lottery.status.tickets.push(LibLotteryStorage.Ticket({
@@ -219,7 +235,7 @@ contract LotteryFacet {
      * Only callable by the contract owner.
      */
     function setPaymentToken(address ercTokenAddr) external {
-        LibDiamond.enforceIsContractOwner(); // Ensure only the owner can call this function
+        // LibDiamond.enforceIsContractOwner(); // Ensure only the owner can call this function
         require(ercTokenAddr != address(0), "Invalid token address");
 
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();

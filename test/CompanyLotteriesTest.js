@@ -1,7 +1,9 @@
 const { ethers } = require("hardhat");
 const { expect } = require("chai");
+const { keccak256, defaultAbiCoder } = ethers.utils;
 
-describe("AdminFacet", function () {
+
+describe("LotteryFacet", function () {
     let companyLotteries, testToken;
     let owner, user;
 
@@ -11,16 +13,18 @@ describe("AdminFacet", function () {
         // Deploy TestToken contract
         const TestToken = await ethers.getContractFactory("TestToken");
         testToken = await TestToken.deploy();
+        await testToken.deployed();
+        console.log("TestToken deployed at:", testToken.address);
     
-        // Ensure TestToken is deployed successfully
-        console.log("TestToken deployed to:", testToken.address);
+        // Deploy LotteryFacet contract with required arguments
+        const LotteryFacet = await ethers.getContractFactory("LotteryFacet");
+        companyLotteries = await LotteryFacet.deploy();
     
-        // Deploy AdminFacet contract with required arguments
-        const AdminFacet = await ethers.getContractFactory("AdminFacet");
-        companyLotteries = await AdminFacet.deploy();
-    
-        // Ensure AdminFacet is deployed successfully
-        console.log("AdminFacet deployed to:", companyLotteries.address);
+        // Ensure LotteryFacet is deployed successfully
+        console.log("LotteryFacet deployed to:", companyLotteries.address);
+
+        // Set the payment token using the owner address
+        await companyLotteries.connect(owner).setPaymentToken(testToken.address);
     });
 
     it("should create a lottery", async () => {
@@ -144,5 +148,203 @@ describe("AdminFacet", function () {
         var lotteryNo = await companyLotteries.getLotteryCount();
         expect(lotteryNo.toNumber()).to.equal(1);
       });
+
+      it("should allow a user to buy a ticket", async function () {
+        // Define lottery parameters
+        const unixEnd = Math.floor(Date.now() / 1000) + 1000; // End time 1000 seconds from now
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1");
+        const htmlHash = ethers.constants.HashZero;
+        const url = "https://example.com";
+    
+        // Create the lottery as the owner
+        await companyLotteries
+          .connect(owner)
+          .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, htmlHash, url);
+    
+        // Mint and approve tokens for the user
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+        await testToken.connect(user).approve(companyLotteries.address, ticketPrice);
+    
+        // Get the hashed random number
+        const rndNumber = 123;
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["address", "uint256"], [user.address, rndNumber]));
+    
+        // Buy a ticket as the user
+        const tx = await companyLotteries
+          .connect(user)
+          .buyTicketTx(1, 1, hashRndNumber);
+    
+        // Wait for transaction to be mined
+        const receipt = await tx.wait();
+    
+        // Check emitted event
+        const event = receipt.events.find((e) => e.event === "TicketPurchased");
+        expect(event.args.lottery_no.toNumber()).to.equal(1);
+        expect(event.args.sticketno.toNumber()).to.equal(1);
+        expect(event.args.buyer).to.equal(user.address);
+        expect(event.args.quantity.toNumber()).to.equal(1);
+    
+            // Check contract balance
+        const contractBalance = await testToken.balanceOf(companyLotteries.address);
+        expect(contractBalance.toString()).to.eq(ticketPrice.toString());
+
+        // Check user's balance (assuming they started with 10 tokens)
+        const userBalance = await testToken.balanceOf(user.address);
+        expect(userBalance.toString()).to.eq(ethers.utils.parseEther("9").toString());
+
+      });
+
+      it("should fail to buy a ticket with quantity exceeding ticket limit", async function () {
+        // Define lottery parameters
+        const unixEnd = Math.floor(Date.now() / 1000) + 1000; // End time 1000 seconds from now
+        const noOfTickets = 50;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1");
+        const htmlHash = ethers.constants.HashZero;
+        const url = "https://example.com";
+    
+        // Create the lottery as the owner
+        await companyLotteries
+            .connect(owner)
+            .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, htmlHash, url);
+    
+        // Mint and approve tokens for the user
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("100"));
+        await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther("60"));
+    
+        // Define lottery and ticket parameters
+        const lotteryNo = 1;
+        const quantity = 30;
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["uint256"], [123]));
+    
+        // Buy the first batch of tickets
+        await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    
+        // Try to buy tickets again exceeding the limit using try-catch
+        let error;
+        try {
+            await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+        } catch (err) {
+            error = err;
+        }
+    
+        // Check if the error contains the expected revert message
+        expect(error).to.be.an("error");
+        expect(error.message).to.include("Exceeds limit");
+    });
+    
+    it("should fail to buy a ticket with quantity higher than 30", async function () {
+        // Define lottery parameters
+        const unixEnd = Math.floor(Date.now() / 1000) + 1000; // End time 1000 seconds from now
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1");
+        const htmlHash = ethers.constants.HashZero;
+        const url = "https://example.com";
+    
+        // Create the lottery as the owner
+        await companyLotteries
+            .connect(owner)
+            .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, htmlHash, url);
+    
+        // Mint and approve tokens for the user
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("100"));
+        await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther("31"));
+    
+        // Define lottery and ticket parameters
+        const lotteryNo = 1;
+        const quantity = 31; // Quantity higher than 30
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["uint256"], [123]));
+    
+        // Try to buy tickets with quantity > 30 and expect a revert
+        let error;
+        try {
+            await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+        } catch (err) {
+            error = err;
+        }
+    
+        // Check if the error contains the expected revert message
+        expect(error).to.be.an("error");
+        expect(error.message).to.include("Purchase up to 30 tickets only");
+    });
+
+    it("should fail to buy a ticket when the payment fails (insufficient balance)", async function () {
+        // Define lottery parameters
+        const unixEnd = Math.floor(Date.now() / 1000) + 1000; // End time 1000 seconds from now
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+        const htmlHash = ethers.constants.HashZero;
+        const url = "https://example.com";
+    
+        // Create the lottery as the owner
+        await companyLotteries
+            .connect(owner)
+            .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, htmlHash, url);
+    
+        // Mint tokens to the user but not enough to cover the ticket price
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10")); // 10 tokens, not enough for the ticket price
+    
+        // Define lottery and ticket parameters
+        const lotteryNo = 1;
+        const quantity = 1;
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["uint256"], [123]));
+    
+        // Try to buy a ticket but the payment should fail
+        let error;
+        try {
+            await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+        } catch (err) {
+            error = err;
+        }
+    
+        // Check if the error contains the expected revert message
+        expect(error).to.be.an("error");
+        expect(error.message).to.include("Payment failed");
+    });
+
+    it("should allow fuzz testing for buyTicketTx with random values", async function () {
+        // Define lottery parameters
+        const unixEnd = Math.floor(Date.now() / 1000) + 1000; // End time 1000 seconds from now
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+        const htmlHash = ethers.constants.HashZero;
+        const url = "https://example.com";
+    
+        // Create the lottery as the owner
+        await companyLotteries
+            .connect(owner)
+            .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, htmlHash, url);
+    
+        // Mint and approve tokens for the user
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("30"));
+        await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther("30"));
+    
+        // Generate random values within the valid range
+        const quantity = Math.floor(Math.random() * 30) + 1; // Quantity between 1 and 30
+        const hashSeed = Math.floor(Math.random() * 10000); // Random seed for the hash
+    
+        // Ensure quantity is within the allowed range (1-30)
+        expect(quantity).to.be.at.least(1).and.at.most(30);
+    
+        // Get the hashed random number
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["uint256"], [hashSeed]));
+    
+        // Buy tickets
+        const lotteryNo = 1;
+        await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+            // Check contract balance
+        const contractBalance = await testToken.balanceOf(companyLotteries.address);
+        expect(contractBalance.toString()).to.eq((ticketPrice*quantity).toString());
+    });    
     
 });
