@@ -66,7 +66,7 @@ function App() {
 
           // Get the user's accounts
           const accounts = await web3Instance.eth.getAccounts();
-          setAccount(accounts[1]);
+          setAccount(accounts[0]);
 
           // Creating contract instances using the Diamond contract address
           const adminFacetInstance = new web3Instance.eth.Contract(AdminFacetABI, ADMIN_FACET_ADDRESS);
