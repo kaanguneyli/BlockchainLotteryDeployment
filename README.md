@@ -29,4 +29,6 @@ Add a new account --> import in --> paste the private key from the node --> then
 
 !!! I change the owner with change_owner.js but dont know if you need that we can test it. currently in the main branch (I guess) !!!
 
+if something goes wrong with error 343 sth sth then reset you nuance from the main account
+
 Then you are good to go, check the console
