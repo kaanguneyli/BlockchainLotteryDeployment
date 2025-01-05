@@ -77,5 +77,10 @@ contract AdminFacet {
         // emit ProceedsWithdrawn(lottery_no, proceeds);
     }
 
+    function getLotteryCount() public view returns (uint) {
+    LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+    return ls.lotteryCount;
+}
+
 
 }
