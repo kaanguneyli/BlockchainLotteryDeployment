@@ -3,14 +3,22 @@ import Web3 from 'web3';
 import logo from './logo.svg';
 import './App.css';
 
-// Import ABIs
+import { ethers } from 'ethers';
+
+/* global BigInt
+ */// Import ABIs
 import AdminFacetABI from './ABIs/AdminFacet.json';
 import LotteryFacetABI from './ABIs/LotteryFacet.json';
 import QueryFacetABI from './ABIs/QueryFacet.json';
+import Main_Facet_ABI from './ABIs/MainFacet.json';
 
-const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
+/* const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
 const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
+ */
+
+const DIAMOND_address = '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512';
+
 
 function App() {
   const [web3, setWeb3] = useState(null);
@@ -53,7 +61,7 @@ function App() {
   const [showGetPaymentToken, setShowGetPaymentToken] = useState(false);
   const [showGetStartTime, setShowGetStartTime] = useState(false);
 
-  useEffect(() => {
+/*   useEffect(() => {
     // Function to connect to MetaMask
     const connectMetaMask = async () => {
       if (window.ethereum) {
@@ -90,43 +98,132 @@ function App() {
     };
 
     connectMetaMask();
-  }, []);
+  }, []); */
+
+  const getLotteryContract = async () => {
+    if (!window.ethereum) throw new Error("Metamask is not installed");
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+
+    // Await the network validation to ensure it's on the correct network
+    const network = await provider.getNetwork();
+    if (network.chainId !== 31337) {
+      alert(
+        "Please switch MetaMask to Hardhat Localhost Network (Chain ID 31337)"
+      );
+      throw new Error("Incorrect network");
+    }
+    const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
+  /*   const lotteryFacetInstance = new ethers.Contract(DIAMOND_address, LotteryFacetABI, signer);
+    const queryFacetInstance = new ethers.Contract(DIAMOND_address, QueryFacetABI, signer); */
+    setAdminFacet(adminFacetInstance);
+/*     setLotteryFacet(lotteryFacetInstance);
+    setQueryFacet(queryFacetInstance); */
+
+    console.log('AdminFacet:', adminFacetInstance);
+/*     console.log('LotteryFacet:', lotteryFacetInstance);
+    console.log('QueryFacet:', queryFacetInstance);
+    console.log(await adminFacetInstance.functions); */
+    return { adminFacetInstance };
+/*     return { adminFacetInstance, lotteryFacetInstance, queryFacetInstance }; */
+
+
+  };
+
+  useEffect(() => {
+    getLotteryContract();
+  }
+  , []);
+
+
 
   // Functions to interact with the contracts
   const createLottery = async () => {
-    const { unixEnd, nooftickets, noofwinners, minpercentage, ticketprice, htmlhash, url } = lotteryParams;
-    if (adminFacet && account) {
+    const {adminFacetInstance} = await getLotteryContract();
+
+    if (adminFacet ) {
       try {
-        console.log('Creating lottery...');
-        await adminFacet.methods.createLottery(
-          unixEnd,
-          nooftickets,
-          noofwinners,
-          minpercentage,
-          web3.utils.toWei(ticketprice, 'ether'),
-          web3.utils.padRight(web3.utils.asciiToHex(htmlhash), 64),
-          url
-        ).send({ from: account });
+        const unixEnd = BigInt(lotteryParams.unixEnd); // Directly convert to BigInt
+        const nooftickets = parseInt(lotteryParams.nooftickets); // Convert to integer
+        const noofwinners = parseInt(lotteryParams.noofwinners); // Convert to integer
+        const minpercentage = parseInt(lotteryParams.minpercentage); // Convert to integer
+        const ticketprice = ethers.utils.parseEther(lotteryParams.ticketprice); // Convert to Ether
+        const htmlhash = ethers.utils.formatBytes32String(lotteryParams.htmlhash); // Convert to bytes32
+        const url = lotteryParams.url; // URL
+
+        console.log("admin facet:", adminFacetInstance);
+
+        const tx = await adminFacetInstance.createLottery(
+            unixEnd,
+            nooftickets,
+            noofwinners,
+            minpercentage,
+            ticketprice,
+            htmlhash,
+            url,
+            { gasLimit: 500000 }
+        );
+        console.log("Transaction sent, waiting for confirmation...");
+
+        await tx.wait();
         console.log('Lottery created');
       } catch (error) {
         console.error('Error creating lottery:', error);
       }
     } else {
+      console.log('AdminFacet contract or account is not set');
+      console.log('AdminFacet:', adminFacet);
       console.error('AdminFacet contract or account is not set');
+    }
+  };
+  const getLotteryInfo = async () => {
+    const { lottery_no } = ticketQuery;
+    const {adminFacetInstance} = await getLotteryContract();
+
+    if (adminFacetInstance) {
+      try {
+        console.log(`Fetching lottery info for lottery ${lottery_no}...`);
+        const result = await adminFacetInstance.getLotteryInfo(lottery_no);
+        setLotteryInfo(result);
+        console.log('Lottery Info:', result);
+      } catch (error) {
+        console.error('Error fetching lottery info:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
     }
   };
 
   const setPaymentToken = async () => {
-    if (adminFacet && account) {
+    if (adminFacet) {
       try {
         console.log('Setting payment token...');
-        await adminFacet.methods.setPaymentToken(tokenAddress).send({ from: account });
+        
+        const tx = await adminFacet.setPaymentToken(tokenAddress);
         console.log('Payment token set');
       } catch (error) {
         console.error('Error setting payment token:', error);
       }
     } else {
       console.error('AdminFacet contract or account is not set');
+    }
+  };
+
+  const getLotteryURL = async () => {
+    const { lottery_no } = ticketQuery;
+    const {adminFacetInstance} = await getLotteryContract();
+    if (adminFacetInstance) {
+      try {
+        console.log(`Fetching lottery URL for lottery ${lottery_no}...`);
+        const result = await adminFacetInstance.getLotteryURL(lottery_no);
+        setLotteryURL(result);
+        console.log('Lottery URL:', result);
+      } catch (error) {
+        console.error('Error fetching lottery URL:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
     }
   };
 
@@ -144,131 +241,112 @@ function App() {
     }
   };
 
-  const getLotteryWinner = async () => {
-    if (queryFacet) {
-      try {
-        console.log('Fetching lottery winner...');
-        const winner = await queryFacet.methods.getWinner().call();
-        setLotteryWinner(winner);
-        console.log('Lottery Winner:', winner);
-      } catch (error) {
-        console.error('Error fetching lottery winner:', error);
-      }
-    } else {
-      console.error('QueryFacet contract is not set');
-    }
-  };
-
-  const getIthPurchasedTicketTx = async () => {
-    const { i, lottery_no } = ticketQuery;
-    if (queryFacet) {
-      try {
-        console.log(`Fetching ticket data for lottery ${lottery_no}, ticket ${i}...`);
-        const result = await queryFacet.methods.getIthPurchasedTicketTx(i, lottery_no).call();
-        setTicketData(result);
-        console.log('Ticket Data:', result);
-      } catch (error) {
-        console.error('Error fetching ticket data:', error);
-      }
-    } else {
-      console.error('QueryFacet contract is not set');
-    }
-  };
-
-  const getLotteryInfo = async () => {
-    const { lottery_no } = ticketQuery;
-    if (queryFacet) {
-      try {
-        console.log(`Fetching lottery info for lottery ${lottery_no}...`);
-        const result = await queryFacet.methods.getLotteryInfo(lottery_no).call();
-        setLotteryInfo(result);
-        console.log('Lottery Info:', result);
-      } catch (error) {
-        console.error('Error fetching lottery info:', error);
-      }
-    } else {
-      console.error('QueryFacet contract is not set');
-    }
-  };
-
   const getLotterySales = async () => {
     const { lottery_no } = ticketQuery;
-    if (queryFacet) {
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
       try {
         console.log(`Fetching lottery sales for lottery ${lottery_no}...`);
-        const result = await queryFacet.methods.getLotterySales(lottery_no).call();
+        const result = await adminFacetInstance.getLotterySales(lottery_no);
         setLotterySales(result);
         console.log('Lottery Sales:', result);
       } catch (error) {
         console.error('Error fetching lottery sales:', error);
       }
     } else {
-      console.error('QueryFacet contract is not set');
+      console.error('AdminFacet contract is not set');
     }
   };
-
-  const getLotteryURL = async () => {
-    const { lottery_no } = ticketQuery;
-    if (queryFacet) {
-      try {
-        console.log(`Fetching lottery URL for lottery ${lottery_no}...`);
-        const result = await queryFacet.methods.getLotteryURL(lottery_no).call();
-        setLotteryURL(result);
-        console.log('Lottery URL:', result);
-      } catch (error) {
-        console.error('Error fetching lottery URL:', error);
-      }
-    } else {
-      console.error('QueryFacet contract is not set');
-    }
-  };
-
+  
   const getNumPurchaseTxs = async () => {
     const { lottery_no } = ticketQuery;
-    if (queryFacet) {
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
       try {
         console.log(`Fetching number of purchase transactions for lottery ${lottery_no}...`);
-        const result = await queryFacet.methods.getNumPurchaseTxs(lottery_no).call();
+        const result = await adminFacetInstance.getNumPurchaseTxs(lottery_no);
         setNumPurchaseTxs(result);
         console.log('Number of Purchase Transactions:', result);
       } catch (error) {
         console.error('Error fetching number of purchase transactions:', error);
       }
     } else {
-      console.error('QueryFacet contract is not set');
+      console.error('AdminFacet contract is not set');
     }
   };
-
+  
   const getPaymentToken = async () => {
-    if (queryFacet) {
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
       try {
         console.log('Fetching payment token...');
-        const result = await queryFacet.methods.getPaymentToken().call();
+        const result = await adminFacetInstance.getPaymentToken();
         setPaymentTokenState(result);
         console.log('Payment Token:', result);
       } catch (error) {
         console.error('Error fetching payment token:', error);
       }
     } else {
-      console.error('QueryFacet contract is not set');
+      console.error('AdminFacet contract is not set');
     }
   };
-
+  
   const getStartTime = async () => {
     const { lottery_no } = ticketQuery;
-    if (queryFacet) {
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
       try {
         console.log(`Fetching start time for lottery ${lottery_no}...`);
-        const result = await queryFacet.methods.getStartTime(lottery_no).call();
+        const result = await adminFacetInstance.getStartTime(lottery_no);
         setStartTime(result);
         console.log('Start Time:', result);
       } catch (error) {
         console.error('Error fetching start time:', error);
       }
     } else {
-      console.error('QueryFacet contract is not set');
+      console.error('AdminFacet contract is not set');
     }
   };
+  
+  const getIthPurchasedTicketTx = async () => {
+    const { i, lottery_no } = ticketQuery;
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
+      try {
+        console.log(`Fetching ticket data for lottery ${lottery_no}, ticket ${i}...`);
+        const result = await adminFacetInstance.getIthPurchasedTicketTx(i, lottery_no);
+        setTicketData(result);
+        console.log('Ticket Data:', result);
+      } catch (error) {
+        console.error('Error fetching ticket data:', error);
+      }
+    } else {
+      console.error('AdminFacet contract is not set');
+    }
+  };
+  
+  const getLotteryWinner = async () => {
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
+      try {
+        console.log('Fetching lottery winner...');
+        const winner = await adminFacetInstance.getWinner();
+        setLotteryWinner(winner);
+        console.log('Lottery Winner:', winner);
+      } catch (error) {
+        console.error('Error fetching lottery winner:', error);
+      }
+    } else {
+      console.error('AdminFacet contract is not set');
+    }
+  };
+  
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -320,6 +398,7 @@ function App() {
         <div>
           <h2>Get Lottery Winner</h2>
           <button onClick={getLotteryWinner}>Get Lottery Winner</button>
+          {lotteryWinner && <p>Lottery Winner: {lotteryWinner}</p>}
         </div>
         <div>
           <h2>Get Ticket Data</h2>
@@ -331,6 +410,7 @@ function App() {
               <button onClick={getIthPurchasedTicketTx}>Submit</button>
             </div>
           )}
+          {ticketData && <p>Ticket Data: {JSON.stringify(ticketData)}</p>}
         </div>
         <div>
           <h2>Get Lottery Info</h2>
@@ -341,6 +421,7 @@ function App() {
               <button onClick={getLotteryInfo}>Submit</button>
             </div>
           )}
+          {lotteryInfo && <p>Lottery Info: {JSON.stringify(lotteryInfo)}</p>}
         </div>
         <div>
           <h2>Get Lottery Sales</h2>
@@ -351,6 +432,7 @@ function App() {
               <button onClick={getLotterySales}>Submit</button>
             </div>
           )}
+          {lotterySales && <p>Lottery Sales: {lotterySales.toString()}</p>}
         </div>
         <div>
           <h2>Get Lottery URL</h2>
@@ -361,6 +443,7 @@ function App() {
               <button onClick={getLotteryURL}>Submit</button>
             </div>
           )}
+          {lotteryURL && <p>Lottery URL: {lotteryURL}</p>}
         </div>
         <div>
           <h2>Get Number of Purchase Transactions</h2>
@@ -371,11 +454,12 @@ function App() {
               <button onClick={getNumPurchaseTxs}>Submit</button>
             </div>
           )}
+          {numPurchaseTxs && <p>Number of Purchase Transactions: {numPurchaseTxs.toString()}</p>}
         </div>
         <div>
           <h2>Get Payment Token</h2>
           <button onClick={getPaymentToken}>Get Payment Token</button>
-          {paymentToken && <p>Payment Token: {paymentToken}</p>}
+          {paymentToken && <p>Payment Token: {paymentToken.toString()}</p>}
         </div>
         <div>
           <h2>Get Start Time</h2>
@@ -386,15 +470,8 @@ function App() {
               <button onClick={getStartTime}>Submit</button>
             </div>
           )}
+          {startTime && <p>Start Time: {startTime.toString()}</p>}
         </div>
-        {adminData && <p>Admin Data: {adminData}</p>}
-        {lotteryWinner && <p>Lottery Winner: {lotteryWinner}</p>}
-        {ticketData && <p>Ticket Data: {JSON.stringify(ticketData)}</p>}
-        {lotteryInfo && <p>Lottery Info: {JSON.stringify(lotteryInfo)}</p>}
-        {lotterySales && <p>Lottery Sales: {lotterySales}</p>}
-        {lotteryURL && <p>Lottery URL: {JSON.stringify(lotteryURL)}</p>}
-        {numPurchaseTxs && <p>Number of Purchase Transactions: {numPurchaseTxs}</p>}
-        {startTime && <p>Start Time: {startTime}</p>}
       </header>
     </div>
   );
