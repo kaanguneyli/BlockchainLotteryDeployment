@@ -21,6 +21,12 @@ function App() {
   const [adminData, setAdminData] = useState(null);
   const [lotteryWinner, setLotteryWinner] = useState(null);
   const [ticketData, setTicketData] = useState(null);
+  const [lotteryInfo, setLotteryInfo] = useState(null);
+  const [lotterySales, setLotterySales] = useState(null);
+  const [lotteryURL, setLotteryURL] = useState(null);
+  const [numPurchaseTxs, setNumPurchaseTxs] = useState(null);
+  const [paymentToken, setPaymentTokenState] = useState(null);
+  const [startTime, setStartTime] = useState(null);
 
   const [lotteryParams, setLotteryParams] = useState({
     unixEnd: '',
@@ -40,6 +46,12 @@ function App() {
   const [showEnterLottery, setShowEnterLottery] = useState(false);
   const [showGetLotteryWinner, setShowGetLotteryWinner] = useState(false);
   const [showGetTicketData, setShowGetTicketData] = useState(false);
+  const [showGetLotteryInfo, setShowGetLotteryInfo] = useState(false);
+  const [showGetLotterySales, setShowGetLotterySales] = useState(false);
+  const [showGetLotteryURL, setShowGetLotteryURL] = useState(false);
+  const [showGetNumPurchaseTxs, setShowGetNumPurchaseTxs] = useState(false);
+  const [showGetPaymentToken, setShowGetPaymentToken] = useState(false);
+  const [showGetStartTime, setShowGetStartTime] = useState(false);
 
   useEffect(() => {
     // Function to connect to MetaMask
@@ -51,17 +63,13 @@ function App() {
           // We use Web3 to interact with the blockchain
           const web3Instance = new Web3(window.ethereum);
           setWeb3(web3Instance);
-          
-          console.log(web3Instance);
 
           // Get the user's accounts
           const accounts = await web3Instance.eth.getAccounts();
-          setAccount(accounts[0]);
+          setAccount(accounts[1]);
 
-          // Diamond contract address
-          
           // Creating contract instances using the Diamond contract address
-          const adminFacetInstance = new web3Instance.eth.Contract(AdminFacetABI, LOTTERY_FACET_ADDRESS );
+          const adminFacetInstance = new web3Instance.eth.Contract(AdminFacetABI, ADMIN_FACET_ADDRESS);
           const lotteryFacetInstance = new web3Instance.eth.Contract(LotteryFacetABI, LOTTERY_FACET_ADDRESS);
           const queryFacetInstance = new web3Instance.eth.Contract(QueryFacetABI, QUERY_FACET_ADDRESS);
 
@@ -96,7 +104,7 @@ function App() {
           noofwinners,
           minpercentage,
           web3.utils.toWei(ticketprice, 'ether'),
-          web3.utils.asciiToHex(htmlhash),
+          web3.utils.padRight(web3.utils.asciiToHex(htmlhash), 64),
           url
         ).send({ from: account });
         console.log('Lottery created');
@@ -167,6 +175,101 @@ function App() {
     }
   };
 
+  const getLotteryInfo = async () => {
+    const { lottery_no } = ticketQuery;
+    if (queryFacet) {
+      try {
+        console.log(`Fetching lottery info for lottery ${lottery_no}...`);
+        const result = await queryFacet.methods.getLotteryInfo(lottery_no).call();
+        setLotteryInfo(result);
+        console.log('Lottery Info:', result);
+      } catch (error) {
+        console.error('Error fetching lottery info:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
+    }
+  };
+
+  const getLotterySales = async () => {
+    const { lottery_no } = ticketQuery;
+    if (queryFacet) {
+      try {
+        console.log(`Fetching lottery sales for lottery ${lottery_no}...`);
+        const result = await queryFacet.methods.getLotterySales(lottery_no).call();
+        setLotterySales(result);
+        console.log('Lottery Sales:', result);
+      } catch (error) {
+        console.error('Error fetching lottery sales:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
+    }
+  };
+
+  const getLotteryURL = async () => {
+    const { lottery_no } = ticketQuery;
+    if (queryFacet) {
+      try {
+        console.log(`Fetching lottery URL for lottery ${lottery_no}...`);
+        const result = await queryFacet.methods.getLotteryURL(lottery_no).call();
+        setLotteryURL(result);
+        console.log('Lottery URL:', result);
+      } catch (error) {
+        console.error('Error fetching lottery URL:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
+    }
+  };
+
+  const getNumPurchaseTxs = async () => {
+    const { lottery_no } = ticketQuery;
+    if (queryFacet) {
+      try {
+        console.log(`Fetching number of purchase transactions for lottery ${lottery_no}...`);
+        const result = await queryFacet.methods.getNumPurchaseTxs(lottery_no).call();
+        setNumPurchaseTxs(result);
+        console.log('Number of Purchase Transactions:', result);
+      } catch (error) {
+        console.error('Error fetching number of purchase transactions:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
+    }
+  };
+
+  const getPaymentToken = async () => {
+    if (queryFacet) {
+      try {
+        console.log('Fetching payment token...');
+        const result = await queryFacet.methods.getPaymentToken().call();
+        setPaymentTokenState(result);
+        console.log('Payment Token:', result);
+      } catch (error) {
+        console.error('Error fetching payment token:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
+    }
+  };
+
+  const getStartTime = async () => {
+    const { lottery_no } = ticketQuery;
+    if (queryFacet) {
+      try {
+        console.log(`Fetching start time for lottery ${lottery_no}...`);
+        const result = await queryFacet.methods.getStartTime(lottery_no).call();
+        setStartTime(result);
+        console.log('Start Time:', result);
+      } catch (error) {
+        console.error('Error fetching start time:', error);
+      }
+    } else {
+      console.error('QueryFacet contract is not set');
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setLotteryParams({ ...lotteryParams, [name]: value });
@@ -184,18 +287,6 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
         <div>
           <h2>Create Lottery</h2>
           <button onClick={() => setShowCreateLottery(!showCreateLottery)}>Create Lottery</button>
@@ -241,9 +332,69 @@ function App() {
             </div>
           )}
         </div>
+        <div>
+          <h2>Get Lottery Info</h2>
+          <button onClick={() => setShowGetLotteryInfo(!showGetLotteryInfo)}>Get Lottery Info</button>
+          {showGetLotteryInfo && (
+            <div>
+              <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+              <button onClick={getLotteryInfo}>Submit</button>
+            </div>
+          )}
+        </div>
+        <div>
+          <h2>Get Lottery Sales</h2>
+          <button onClick={() => setShowGetLotterySales(!showGetLotterySales)}>Get Lottery Sales</button>
+          {showGetLotterySales && (
+            <div>
+              <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+              <button onClick={getLotterySales}>Submit</button>
+            </div>
+          )}
+        </div>
+        <div>
+          <h2>Get Lottery URL</h2>
+          <button onClick={() => setShowGetLotteryURL(!showGetLotteryURL)}>Get Lottery URL</button>
+          {showGetLotteryURL && (
+            <div>
+              <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+              <button onClick={getLotteryURL}>Submit</button>
+            </div>
+          )}
+        </div>
+        <div>
+          <h2>Get Number of Purchase Transactions</h2>
+          <button onClick={() => setShowGetNumPurchaseTxs(!showGetNumPurchaseTxs)}>Get Number of Purchase Transactions</button>
+          {showGetNumPurchaseTxs && (
+            <div>
+              <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+              <button onClick={getNumPurchaseTxs}>Submit</button>
+            </div>
+          )}
+        </div>
+        <div>
+          <h2>Get Payment Token</h2>
+          <button onClick={getPaymentToken}>Get Payment Token</button>
+          {paymentToken && <p>Payment Token: {paymentToken}</p>}
+        </div>
+        <div>
+          <h2>Get Start Time</h2>
+          <button onClick={() => setShowGetStartTime(!showGetStartTime)}>Get Start Time</button>
+          {showGetStartTime && (
+            <div>
+              <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+              <button onClick={getStartTime}>Submit</button>
+            </div>
+          )}
+        </div>
         {adminData && <p>Admin Data: {adminData}</p>}
         {lotteryWinner && <p>Lottery Winner: {lotteryWinner}</p>}
         {ticketData && <p>Ticket Data: {JSON.stringify(ticketData)}</p>}
+        {lotteryInfo && <p>Lottery Info: {JSON.stringify(lotteryInfo)}</p>}
+        {lotterySales && <p>Lottery Sales: {lotterySales}</p>}
+        {lotteryURL && <p>Lottery URL: {JSON.stringify(lotteryURL)}</p>}
+        {numPurchaseTxs && <p>Number of Purchase Transactions: {numPurchaseTxs}</p>}
+        {startTime && <p>Start Time: {startTime}</p>}
       </header>
     </div>
   );
