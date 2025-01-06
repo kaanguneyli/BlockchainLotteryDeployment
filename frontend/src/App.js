@@ -11,6 +11,7 @@ import AdminFacetABI from './ABIs/AdminFacet.json';
 import LotteryFacetABI from './ABIs/LotteryFacet.json';
 import QueryFacetABI from './ABIs/QueryFacet.json';
 import Main_Facet_ABI from './ABIs/MainFacet.json';
+import ERC20ABI from './ABIs/ERC20ABI.json';
 
 /* const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
 const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
@@ -18,7 +19,8 @@ const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
 const DIAMOND_address = '0xA05bBbdDfa4A0Ac028Ff153F283e73A0A62E088f';
-
+let TOKEN_ADDRESS = '';
+ 
 
 function App() {
   const [web3, setWeb3] = useState(null);
@@ -65,6 +67,7 @@ function App() {
   const [showGetNumPurchaseTxs, setShowGetNumPurchaseTxs] = useState(false);
   const [showGetPaymentToken, setShowGetPaymentToken] = useState(false);
   const [showGetStartTime, setShowGetStartTime] = useState(false);
+  const [tokenInstance, setTokenContract] = useState(null);
   
 
 
@@ -80,7 +83,8 @@ function App() {
     const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
 
     setAdminFacet(adminFacetInstance);
-
+    const userAddress = await signer.getAddress();
+        setAccount(userAddress);
 
     console.log('AdminFacet:', adminFacetInstance);
 
@@ -94,7 +98,16 @@ function App() {
   , []);
 
 
-
+  useEffect(() => {
+    if (TOKEN_ADDRESS) {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      console.log('Token Address:', TOKEN_ADDRESS);
+      const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, signer);
+      console.log('Token Instance:', tokenInstance);
+      setTokenContract(tokenInstance);
+    }
+  }, [TOKEN_ADDRESS]);
   // Functions to interact with the contracts
   const createLottery = async () => {
     const {adminFacetInstance} = await getLotteryContract();
@@ -327,19 +340,42 @@ function App() {
   
   const buyTicket = async () => {
     const { adminFacetInstance } = await getLotteryContract();
+    await getPaymentToken(); // Ensure TOKEN_ADDRESS is set correctly
+    TOKEN_ADDRESS = paymentToken;
+    console.log("token address:", TOKEN_ADDRESS);
+  
+    if (!TOKEN_ADDRESS) {
+      console.error('TOKEN_ADDRESS is not set');
+      return;
+    }
+  
+    if (!account) {
+      console.error('Account is not set');
+      return;
+    }
+  
     const { keccak256, defaultAbiCoder } = ethers.utils;
     if (adminFacetInstance) {
       try {
-        console.log('Fetching lottery winner...');
+        console.log('Buying tickets...');
+        const totalCost = ethers.utils.parseEther(0.1.toString());
+        console.log('Account:', account);
+        console.log('Token Address:', TOKEN_ADDRESS);
+  
+        const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, new ethers.providers.Web3Provider(window.ethereum).getSigner());
+        const approveTx = await tokenInstance.approve(adminFacetInstance.address, totalCost);
+        await approveTx.wait();
+
+        console.log('Approved token instance');
+  
         const winner = await adminFacetInstance.buyTicketTx(
-          3, // lottery_no
-          2,  
+          4, // lottery_no
+          1,  
           keccak256(defaultAbiCoder.encode(["uint256"], [123])),  
-          
-         {gasLimit: 500000}
+          { gasLimit: 500000 }
         );
         setLotteryWinner(winner);
-
+  
         console.log('Lottery Winner:', winner);
       } catch (error) {
         console.error('Error fetching lottery winner:', error);
