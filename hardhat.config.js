@@ -11,5 +11,9 @@ module.exports = {
       url: "https://core.bloxberg.org",
       accounts: [process.env.PRIVATE_KEY], // Ensure this is set in your .env file
     },
+    sepolia: {
+      url: process.env.API_URL,
+      accounts: [process.env.PRIVATE_KEY],
+    },
   },
 };
