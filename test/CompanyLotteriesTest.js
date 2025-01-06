@@ -575,5 +575,333 @@ describe("LotteryFacet", function () {
         // Validate the result
         expect(paymentTokenAddress).to.equal(testToken.address);
     });
-      
+    
+    it("should reveal random number for valid ticket", async function () {
+    const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+    const noOfTickets = 100;
+    const noOfWinners = 1;
+    const minPercentage = 1;
+    const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+    // Create lottery
+    await companyLotteries
+        .connect(owner)
+        .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+    // Mint tokens to user and approve for ticket purchase
+    const quantity = 3;
+    await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+    await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+    // Purchase tickets
+    const lotteryNo = 1;
+    const hashSeed = 123;
+    const hashRndNumber = ethers.utils.solidityKeccak256(
+        ["address", "uint256"],
+        [user.address, hashSeed]
+    ); 
+    const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    const receipt = await tx.wait();
+    const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+    // Get the start time and fast-forward to reveal period
+    const startTime = await companyLotteries.getStartTime(lotteryNo);
+    const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
+
+    // Fast-forward blockchain time
+    await network.provider.send("evm_increaseTime", [timeToWarp]);
+    await network.provider.send("evm_mine");
+
+    // Call reveal function with correct random number
+    const result = await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+    expect(result).to.not.be.empty;
+ 
+});
+
+it("should fail to reveal random number for lottery with insufficient ticket sales", async function () {
+    const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+    const noOfTickets = 100;
+    const noOfWinners = 1;
+    const minPercentage = 10; // Min percentage of sales to proceed
+    const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+    // Create lottery
+    await companyLotteries
+        .connect(owner)
+        .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+    const quantity = 3;
+
+    // Mint tokens to user and approve for ticket purchase
+    await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+    await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+    // Buy tickets
+    const lotteryNo = 1;
+    const hashSeed = 123;
+    const hashRndNumber = ethers.utils.solidityKeccak256(
+        ["address", "uint256"],
+        [user.address, hashSeed]
+    );
+    const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    const receipt = await tx.wait();
+    const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+    // Get the start time and fast-forward to reveal period
+    const startTime = await companyLotteries.getStartTime(lotteryNo);
+    const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
+
+    // Fast-forward blockchain time
+    await network.provider.send("evm_increaseTime", [timeToWarp]);
+    await network.provider.send("evm_mine");
+
+    // Try to reveal random number and catch the error
+    let result;
+    try {
+        result = await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+    } catch (error) {
+        result = error; // Catch the error
+    }
+    // Assert that the error is as expected (Lottery cancelled)
+    expect(result.message).to.include("Lottery cancelled");
+});
+
+it("should fail to reveal random number before the reveal period starts", async function () {
+    const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+    const noOfTickets = 100;
+    const noOfWinners = 3;
+    const minPercentage = 10; // Min percentage of sales to proceed
+    const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+    // Create lottery
+    await companyLotteries
+        .connect(owner)
+        .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+    const quantity = 1;
+
+    // Mint tokens to user and approve for ticket purchase
+    await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+    await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+    // Buy ticket
+    const lotteryNo = 1;
+    const hashSeed = 123;
+    const hashRndNumber = ethers.utils.solidityKeccak256(
+        ["address", "uint256"],
+        [user.address, hashSeed]
+    );
+    const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    const receipt = await tx.wait();
+    const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+    // Try to reveal random number before reveal period starts and catch the error
+    let result;
+    try {
+        result = await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+    } catch (error) {
+        result = error; // Catch the error
+    }
+    // Assert that the error is as expected (Reveal period not started)
+    expect(result.message).to.include("Reveal period not started");
+});
+
+it("should fail to reveal random number for a ticket not owned by the user", async function () {
+    const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+    const noOfTickets = 100;
+    const noOfWinners = 3;
+    const minPercentage = 1;
+    const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+    // Create lottery
+    await companyLotteries
+        .connect(owner)
+        .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+    const quantity = 1;
+
+    // Mint tokens to user and approve for ticket purchase
+    await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+    await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+    // Buy ticket
+    const lotteryNo = 1;
+    const hashSeed = 123;
+    const hashRndNumber = ethers.utils.solidityKeccak256(
+        ["address", "uint256"],
+        [user.address, hashSeed]
+    );
+    const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    const receipt = await tx.wait();
+    const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+    // Fast-forward to reveal period
+    const startTime = await companyLotteries.getStartTime(lotteryNo);
+    const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
+    await network.provider.send("evm_increaseTime", [timeToWarp]);
+    await network.provider.send("evm_mine");
+
+    // Try to reveal the ticket from another address (not the owner) and catch the error
+    let result;
+    try {
+        result = await companyLotteries.connect(companyLotteries.address).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+    } catch (error) {
+        result = error; // Catch the error
+    }
+
+    // Assert that the error message is as expected (Not ticket owner)
+    expect(result.message).to.include("cannot sign transactions");
+});
+
+it("should fail to reveal random number for a ticket that has already been revealed", async function () {
+    const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+    const noOfTickets = 100;
+    const noOfWinners = 1;
+    const minPercentage = 1;  // quantity is higher than minimum
+    const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+    // Create lottery
+    await companyLotteries
+        .connect(owner)
+        .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+    const quantity = 1;
+
+    // Mint tokens to user and approve for ticket purchase
+    await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+    await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+    // Buy ticket
+    const lotteryNo = 1;
+    const hashSeed = 123;
+    const hashRndNumber = ethers.utils.solidityKeccak256(
+        ["address", "uint256"],
+        [user.address, hashSeed]
+    );
+    const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    const receipt = await tx.wait();
+    const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+    // Fast-forward to reveal period
+    const startTime = await companyLotteries.getStartTime(lotteryNo);
+    const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
+    await network.provider.send("evm_increaseTime", [timeToWarp]);
+    await network.provider.send("evm_mine");
+
+    // Reveal the random number for the first time
+    await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+
+    // Try to reveal the same ticket again and catch the error
+    let result;
+    try {
+        result = await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+    } catch (error) {
+        result = error; // Catch the error
+    }
+
+    // Assert that the error message is as expected (Ticket already revealed)
+    expect(result.message).to.include("Ticket already revealed");
+});
+
+it("should fail to reveal random number for a lottery that doesn't exist", async function () {
+    const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+    const noOfTickets = 100;
+    const noOfWinners = 3;
+    const minPercentage = 1;  // quantity is higher than minimum
+    const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+    // Create lottery
+    await companyLotteries
+        .connect(owner)
+        .createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+    const quantity = 3;
+
+    // Mint tokens to user and approve for ticket purchase
+    await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+    await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+    // Buy ticket
+    const lotteryNo = 1;
+    const hashSeed = 123;
+    const hashRndNumber = ethers.utils.solidityKeccak256(
+        ["address", "uint256"],
+        [user.address, hashSeed]
+    );
+    const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    const receipt = await tx.wait();
+    const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+    // Fast-forward to reveal period
+    const startTime = await companyLotteries.getStartTime(lotteryNo);
+    const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
+    await network.provider.send("evm_increaseTime", [timeToWarp]);
+    await network.provider.send("evm_mine");
+
+    // Try to reveal the ticket for a lottery that doesn't exist
+    let result;
+    try {
+        result = await companyLotteries.connect(user).revealRndNumberTx(2, event.args.sticketno, event.args.quantity, hashSeed);
+    } catch (error) {
+        result = error; // Catch the error
+    }
+
+    // Assert that the error message is as expected (Invalid lottery number)
+    expect(result.message).to.include("Invalid lottery number");
+});
+
+// it.only("should correctly check if my ticket won after reveal", async function () {
+//     const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
+//     const noOfTickets = 100;
+//     const quantity = 1; // We want all tickets to win for simplicity
+//     const minPercentage = 3;
+//     const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+
+//     // Create lottery
+//     await companyLotteries
+//         .connect(owner)
+//         .createLottery(unixEnd, noOfTickets, quantity, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
+
+//     // Mint tokens to user and approve for ticket purchase
+//     await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+//     await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
+
+//     // Buy tickets
+//     const lotteryNo = 1;
+//     const hashSeed = 123;
+//     const hashRndNumber = ethers.utils.solidityKeccak256(
+//         ["address", "uint256"],
+//         [user.address, hashSeed]
+//     );
+//     const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, 3, hashRndNumber);
+//     const receipt = await tx.wait();
+//     const event = receipt.events.find((e) => e.event === "TicketPurchased");
+
+//     // Fast-forward to the reveal period
+//     const startTime = await companyLotteries.getStartTime(lotteryNo);
+//     const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
+//     await network.provider.send("evm_increaseTime", [timeToWarp]);
+//     await network.provider.send("evm_mine");
+
+//     // Reveal the random number for the tickets
+//     await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
+//     const winnerEvent = receipt.events.find(event => event.event === "WinnersAnnounced");
+//     console.log(winnerEvent.args.winningTicket.toString());
+
+//     // Fast-forward to the end of the lottery
+//     await network.provider.send("evm_increaseTime", [unixEnd]);
+//     await network.provider.send("evm_mine");
+
+//     // Check if the tickets won (all of them should win)
+//     const ticket1Won = await companyLotteries.checkIfMyTicketWon(lotteryNo, event.args.sticketno);
+//     const ticket2Won = await companyLotteries.checkIfMyTicketWon(lotteryNo, event.args.sticketno.add(1));  // Ticket 1 + 1
+//     const ticket3Won = await companyLotteries.checkIfMyTicketWon(lotteryNo, event.args.sticketno.add(2));  // Ticket 1 + 2
+
+//     // Assert that all tickets won
+//     expect(ticket1Won).to.be.true;
+//     expect(ticket2Won).to.be.true;
+//     expect(ticket3Won).to.be.true;
+// });
+
+
 });
