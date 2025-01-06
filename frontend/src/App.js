@@ -17,7 +17,7 @@ const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512';
+const DIAMOND_address = '0x62556990068106800d7dc48edae0d9801d1ebf3886db725ef4a4772d8a16cb23';
 
 
 function App() {

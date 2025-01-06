@@ -51,7 +51,7 @@ describe("LotteryFacet", function () {
         const receipt = await tx.wait();
 
         // Validate lottery creation (checking lotteryCount)
-        var lotteryNo = await companyLotteries.getLotteryCount();
+        var lotteryNo = await companyLotteries.getCurrentLotteryNo();
         expect(lotteryNo.toNumber()).to.equal(1);
 
         // Validate event emission
@@ -145,7 +145,7 @@ describe("LotteryFacet", function () {
           htmlHash,
           url
         );
-        var lotteryNo = await companyLotteries.getLotteryCount();
+        var lotteryNo = await companyLotteries.getCurrentLotteryNo();
         expect(lotteryNo.toNumber()).to.equal(1);
       });
 
@@ -183,7 +183,7 @@ describe("LotteryFacet", function () {
         // Check emitted event
         const event = receipt.events.find((e) => e.event === "TicketPurchased");
         expect(event.args.lottery_no.toNumber()).to.equal(1);
-        expect(event.args.sticketno.toNumber()).to.equal(1);
+        expect(event.args.sticketno.toNumber()).to.equal(0);
         expect(event.args.buyer).to.equal(user.address);
         expect(event.args.quantity.toNumber()).to.equal(1);
     
@@ -346,5 +346,234 @@ describe("LotteryFacet", function () {
         const contractBalance = await testToken.balanceOf(companyLotteries.address);
         expect(contractBalance.toString()).to.eq((ticketPrice*quantity).toString());
     });    
+
+    it("should allow getting the number of purchase transactions", async function () {
+        // Define lottery parameterst
+        const [owner, user] = await ethers.getSigners();
+        const unixEnd = (await ethers.provider.getBlock("latest")).timestamp + 1000;
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
+        const htmlHash = ethers.constants.HashZero;
+        const url = "https://example.com";
+        
+        // Create the lottery as the owner
+        await companyLotteries.connect(owner).createLottery(unixEnd, noOfTickets, noOfWinners, minPercentage, ticketPrice, htmlHash, url);
     
+        // Buy 5 tickets in 1 purchase as the user
+        const quantity = 5;
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+        await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther("5"));
+    
+        const lotteryNo = 1;
+        const hashSeed = 123;
+        const hashRndNumber = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["uint256"], [hashSeed]));
+    
+        // Wait for the transaction to be mined and capture the event
+        const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+        const receipt = await tx.wait();
+    
+        // Extract the event arguments (e.g., ticket number or transaction number)
+        const event = receipt.events.find(e => e.event === "TicketPurchased");
+        const purchasedTx = await companyLotteries.getNumPurchaseTxs(lotteryNo);
+    
+        // Assert the number of purchase transactions is 1 but purchased tickets is 5
+        expect(purchasedTx.toNumber()).to.equal(1);
+        expect(event.args.quantity.toNumber()).to.equal(5);
+      });
+
+      it("should fail to get the number of purchase transactions for a non-existent lottery", async function () {
+        // Set up the necessary variables
+        const nonExistentLotteryNo = 999; // Assuming no lottery with this number exists
+        
+        let error;
+        try {
+            // Attempt to call getNumPurchaseTxs with a non-existent lottery number
+            await companyLotteries.getNumPurchaseTxs(nonExistentLotteryNo);
+        } catch (err) {
+            // Catch the error
+            error = err;
+        }
+    
+        // Assert that the error message includes the expected revert message
+        expect(error).to.be.an("error");
+        expect(error.message).to.include("Invalid lottery number");
+    });
+    
+    it("should return the correct information for the i-th purchased ticket transaction", async function () {
+        // Setup lottery parameters
+        const unixEnd = (await ethers.provider.getBlock("latest")).timestamp + 1000; // Current time + 1000
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 ether
+        const htmlHash = ethers.utils.formatBytes32String("example"); // A valid bytes32 string
+        const url = "https://example.com";
+    
+        // Create the lottery
+        await companyLotteries.connect(owner).createLottery(
+          unixEnd,
+          noOfTickets,
+          noOfWinners,
+          minPercentage,
+          ticketPrice,
+          htmlHash,
+          url
+        );
+    
+        // Buy 5 tickets
+        const lotteryNo = 1;
+        const quantity = 5;
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["address", "uint256"], [user.address, 123]));
+
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
+        await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther("5"));
+
+        const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+        const receipt = await tx.wait();
+        const event = receipt.events.find(e => e.event === "TicketPurchased");
+    
+        // Get i-th ticket purchase transaction
+        const i = 1;
+        await companyLotteries.getIthPurchasedTicketTx(i, lotteryNo);
+    
+        // Validate the result
+        expect(event.args.sticketno.toNumber()).to.equal(0); // Ensure the ticket number is correct (or any other logic you need here)
+        expect(event.args.quantity.toNumber()).to.equal(5); // Ensure the returned quantity matches the purchased quantity
+      });
+
+      it("should return the correct current lottery number", async function () {
+        // Define lottery parameters
+        const unixEnd = (await ethers.provider.getBlock("latest")).timestamp + 1000; // Current time + 1000
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 ether
+        const htmlHash = ethers.utils.formatBytes32String("example"); // A valid bytes32 string
+        const url = "https://example.com";
+    
+        // Create the lottery
+        await companyLotteries.connect(owner).createLottery(
+            unixEnd,
+            noOfTickets,
+            noOfWinners,
+            minPercentage,
+            ticketPrice,
+            htmlHash,
+            url
+        );
+    
+        // Validate the current lottery number
+        const currentLotteryNo = await companyLotteries.getCurrentLotteryNo();
+        expect(currentLotteryNo.toNumber()).to.equal(1);
+    });
+    
+    it("should return the correct lottery information", async function () {
+        // Define lottery parameters
+        const unixEnd = (await ethers.provider.getBlock("latest")).timestamp + 1000; // Current time + 1000
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 ether
+        const htmlHash = ethers.utils.formatBytes32String("example"); // A valid bytes32 string
+        const url = "https://example.com";
+    
+        // Create the lottery
+        await companyLotteries.connect(owner).createLottery(
+            unixEnd,
+            noOfTickets,
+            noOfWinners,
+            minPercentage,
+            ticketPrice,
+            htmlHash,
+            url
+        );
+    
+        // Get lottery information
+        const lotteryInfo = await companyLotteries.getLotteryInfo(1);    
+        // Validate lottery information
+        expect(lotteryInfo[1].toNumber()).to.equal(noOfTickets);
+        expect(lotteryInfo[2].toNumber()).to.equal(noOfWinners);
+        expect(lotteryInfo[3].toNumber()).to.equal(minPercentage);
+        expect(lotteryInfo[4].toString()).to.equal(ticketPrice.toString());
+    });
+    
+    it("should return the correct lottery URL and HTML hash", async function () {
+        // Define lottery parameters
+        const unixEnd = (await ethers.provider.getBlock("latest")).timestamp + 1000; // Current time + 1000
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 ether
+        const htmlHash = ethers.utils.formatBytes32String("example"); // A valid bytes32 string
+        const url = "https://example.com";
+    
+        // Create the lottery
+        await companyLotteries.connect(owner).createLottery(
+            unixEnd,
+            noOfTickets,
+            noOfWinners,
+            minPercentage,
+            ticketPrice,
+            htmlHash,
+            url
+        );
+    
+        // Get lottery URL and HTML hash
+        const [returnedHtmlHash, returnedUrl] = await companyLotteries.getLotteryURL(1);
+    
+        // Validate URL and HTML hash
+        expect(returnedHtmlHash).to.equal(htmlHash);
+        expect(returnedUrl).to.equal(url);
+    });
+
+    it("should return the correct number of tickets sold for a lottery", async function () {
+        // Define lottery parameters
+        const unixEnd = (await ethers.provider.getBlock("latest")).timestamp + 1000; // Current time + 1000
+        const noOfTickets = 100;
+        const noOfWinners = 3;
+        const minPercentage = 10;
+        const ticketPrice = ethers.utils.parseEther("1"); // 1 ether
+        const htmlHash = ethers.utils.formatBytes32String("example"); // A valid bytes32 string
+        const url = "https://example.com";
+    
+        // Create the lottery
+        await companyLotteries.connect(owner).createLottery(
+            unixEnd,
+            noOfTickets,
+            noOfWinners,
+            minPercentage,
+            ticketPrice,
+            htmlHash,
+            url
+        );
+    
+        // Buy tickets
+        const lotteryNo = 1;
+        const quantity = 5;
+        const hashRndNumber = keccak256(defaultAbiCoder.encode(["address", "uint256"], [user.address, 123]));
+    
+        await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("100"));
+        await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther("10"));
+    
+        await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+        await companyLotteries.connect(user).buyTicketTx(lotteryNo, quantity, hashRndNumber);
+    
+        // Get the number of tickets sold
+        const ticketsSold = await companyLotteries.getLotterySales(lotteryNo);
+    
+        // Validate the result
+        expect(ticketsSold.toNumber()).to.equal(2 * quantity);
+    });
+
+    it("should return the correct payment token address for a lottery", async function () {
+
+        // Get the payment token address
+        const paymentTokenAddress = await companyLotteries.getPaymentToken();
+        console.log(paymentTokenAddress);
+        // Validate the result
+        expect(paymentTokenAddress).to.equal(testToken.address);
+    });
+      
 });

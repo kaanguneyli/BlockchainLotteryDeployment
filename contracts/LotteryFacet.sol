@@ -59,9 +59,9 @@ contract LotteryFacet {
             quantity: quantity,
             buyer: msg.sender
         }));
+        emit TicketPurchased(lottery_no, lottery.status.ticketsSold, msg.sender, quantity);
 
         lottery.status.ticketsSold += quantity;
-        emit TicketPurchased(lottery_no, lottery.status.ticketsSold, msg.sender, quantity);
     }
 
     function revealRndNumberTx(uint lottery_no, uint sticketno, uint quantity, uint rnd_number) external {
@@ -265,7 +265,7 @@ contract LotteryFacet {
         // emit ProceedsWithdrawn(lottery_no, proceeds);
     }
 
-    function getLotteryCount() public view returns (uint) {
+    function getCurrentLotteryNo() public view returns (uint) {
     LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
     return ls.lotteryCount;
     }
