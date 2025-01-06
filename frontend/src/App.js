@@ -361,10 +361,20 @@ function App() {
         const totalCost = ethers.utils.parseEther(0.1.toString());
         console.log('Account:', account);
         console.log('Token Address:', TOKEN_ADDRESS);
-  
+        
+        
         const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, new ethers.providers.Web3Provider(window.ethereum).getSigner());
-        const approveTx = await tokenInstance.approve(adminFacetInstance.address, totalCost);
+        const approveTx = await tokenInstance.approve(account, totalCost);
         await approveTx.wait();
+
+        if (approveTx) {
+          // pay the price from token
+          console.log('Approved token instance');
+          const transferTx = await tokenInstance.transfer(account, ethers.utils.parseEther(0.00001.toString()));
+          await transferTx.wait();
+          console.log('Transferred tokens to contract');
+
+        }
 
         console.log('Approved token instance');
   
