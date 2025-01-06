@@ -17,7 +17,7 @@ const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0x62556990068106800d7dc48edae0d9801d1ebf3886db725ef4a4772d8a16cb23';
+const DIAMOND_address = '0xA05bBbdDfa4A0Ac028Ff153F283e73A0A62E088f';
 
 
 function App() {
@@ -35,6 +35,11 @@ function App() {
   const [numPurchaseTxs, setNumPurchaseTxs] = useState(null);
   const [paymentToken, setPaymentTokenState] = useState(null);
   const [startTime, setStartTime] = useState(null);
+  const [ticket, setTicket] = useState({
+    lottery_no: '',
+    quantity: '',
+    random_number: ''
+  });
 
   const [lotteryParams, setLotteryParams] = useState({
     unixEnd: '',
@@ -60,45 +65,8 @@ function App() {
   const [showGetNumPurchaseTxs, setShowGetNumPurchaseTxs] = useState(false);
   const [showGetPaymentToken, setShowGetPaymentToken] = useState(false);
   const [showGetStartTime, setShowGetStartTime] = useState(false);
+  
 
-/*   useEffect(() => {
-    // Function to connect to MetaMask
-    const connectMetaMask = async () => {
-      if (window.ethereum) {
-        try {
-          // Request account access if needed
-          await window.ethereum.request({ method: 'eth_requestAccounts' });
-          // We use Web3 to interact with the blockchain
-          const web3Instance = new Web3(window.ethereum);
-          setWeb3(web3Instance);
-
-          // Get the user's accounts
-          const accounts = await web3Instance.eth.getAccounts();
-          setAccount(accounts[0]);
-
-          // Creating contract instances using the Diamond contract address
-          const adminFacetInstance = new web3Instance.eth.Contract(AdminFacetABI, ADMIN_FACET_ADDRESS);
-          const lotteryFacetInstance = new web3Instance.eth.Contract(LotteryFacetABI, LOTTERY_FACET_ADDRESS);
-          const queryFacetInstance = new web3Instance.eth.Contract(QueryFacetABI, QUERY_FACET_ADDRESS);
-
-          setAdminFacet(adminFacetInstance);
-          setLotteryFacet(lotteryFacetInstance);
-          setQueryFacet(queryFacetInstance);
-
-          console.log('MetaMask connected');
-          console.log('AdminFacet:', adminFacetInstance);
-          console.log('LotteryFacet:', lotteryFacetInstance);
-          console.log('QueryFacet:', queryFacetInstance);
-        } catch (error) {
-          console.error('User denied account access or error occurred', error);
-        }
-      } else {
-        console.error('MetaMask not detected');
-      }
-    };
-
-    connectMetaMask();
-  }, []); */
 
   const getLotteryContract = async () => {
     if (!window.ethereum) throw new Error("Metamask is not installed");
@@ -108,26 +76,15 @@ function App() {
 
     // Await the network validation to ensure it's on the correct network
     const network = await provider.getNetwork();
-    if (network.chainId !== 31337) {
-      alert(
-        "Please switch MetaMask to Hardhat Localhost Network (Chain ID 31337)"
-      );
-      throw new Error("Incorrect network");
-    }
+   
     const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
-  /*   const lotteryFacetInstance = new ethers.Contract(DIAMOND_address, LotteryFacetABI, signer);
-    const queryFacetInstance = new ethers.Contract(DIAMOND_address, QueryFacetABI, signer); */
+
     setAdminFacet(adminFacetInstance);
-/*     setLotteryFacet(lotteryFacetInstance);
-    setQueryFacet(queryFacetInstance); */
+
 
     console.log('AdminFacet:', adminFacetInstance);
-/*     console.log('LotteryFacet:', lotteryFacetInstance);
-    console.log('QueryFacet:', queryFacetInstance);
-    console.log(await adminFacetInstance.functions); */
-    return { adminFacetInstance };
-/*     return { adminFacetInstance, lotteryFacetInstance, queryFacetInstance }; */
 
+    return { adminFacetInstance };
 
   };
 
@@ -266,7 +223,7 @@ function App() {
     if (adminFacetInstance) {
       try {
         console.log(`Fetching number of purchase transactions for lottery ${lottery_no}...`);
-        const result = await adminFacetInstance.getNumPurchaseTxs(lottery_no);
+        const result = await adminFacetInstance.getNumPurchaseTxs(parseInt(lottery_no));
         setNumPurchaseTxs(result);
         console.log('Number of Purchase Transactions:', result);
       } catch (error) {
@@ -361,6 +318,37 @@ function App() {
     const { name, value } = e.target;
     setTicketQuery({ ...ticketQuery, [name]: value });
   };
+
+  const handleBuyTicketChange = (e) => {
+    const { name, value } = e.target;
+    setTicket({ ...ticket, [name]: value });
+  }
+
+  
+  const buyTicket = async () => {
+    const { adminFacetInstance } = await getLotteryContract();
+    const { keccak256, defaultAbiCoder } = ethers.utils;
+    if (adminFacetInstance) {
+      try {
+        console.log('Fetching lottery winner...');
+        const winner = await adminFacetInstance.buyTicketTx(
+          3, // lottery_no
+          2,  
+          keccak256(defaultAbiCoder.encode(["uint256"], [123])),  
+          
+         {gasLimit: 500000}
+        );
+        setLotteryWinner(winner);
+
+        console.log('Lottery Winner:', winner);
+      } catch (error) {
+        console.error('Error fetching lottery winner:', error);
+      }
+    } else {
+      console.error('AdminFacet contract is not set');
+    }
+  };
+
 
   return (
     <div className="App">
@@ -472,6 +460,17 @@ function App() {
           )}
           {startTime && <p>Start Time: {startTime.toString()}</p>}
         </div>
+
+        <div>
+          <h2>Buy Ticket</h2>
+          <div>
+            <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleBuyTicketChange} />
+            <input type="number" name="quantity" placeholder="Quantity" value={ticketQuery.quantity} onChange={handleBuyTicketChange} />
+            <input type="number" name="random_number" placeholder="Random Number" value={ticketQuery.random_number} onChange={handleBuyTicketChange} />
+            <button onClick={buyTicket}>Submit</button>
+          </div>
+        </div>
+
       </header>
     </div>
   );
