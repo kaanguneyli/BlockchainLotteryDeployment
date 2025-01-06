@@ -74,6 +74,13 @@ function App() {
   const getLotteryContract = async () => {
     if (!window.ethereum) throw new Error("Metamask is not installed");
 
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      console.log("Connected account:", accounts[0]);
+  } catch (error) {
+      console.error("Error connecting to MetaMask:", error);
+  }
+
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
 
@@ -201,7 +208,7 @@ function App() {
     if (lotteryFacet && account) {
       try {
         console.log('Entering lottery...');
-        await lotteryFacet.methods.enter().send({ from: account, value: web3.utils.toWei('0.1', 'ether') });
+        await lotteryFacet.methods.enter().send({ from: account, value: web3.utils.toWei('0.0001', 'ether') });
         console.log('Entered the lottery');
       } catch (error) {
         console.error('Error entering lottery:', error);
