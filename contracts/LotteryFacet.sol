@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 
 import "./diamond/contracts/libraries/LibDiamond.sol";
+import './diamond/contracts/Diamond.sol';                   // new
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -72,7 +73,6 @@ contract LotteryFacet {
     event WinningsClaimed(uint indexed lottery_no, address indexed winner, uint amount);
     event LotteryCreated(uint indexed lottery_no);
 
-
     function buyTicketTx(uint lottery_no, uint quantity, bytes32 hash_rnd_number) external {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         
@@ -86,22 +86,20 @@ contract LotteryFacet {
 
         uint totalCost = lottery.details.ticketprice * quantity;
         require(
-    address(ls.paymentToken).code.length > 0,
-    "Invalid payment token address"
-    );
+            address(ls.paymentToken).code.length > 0,
+            "Invalid payment token address"
+        );
 
-    (bool success, bytes memory data) = address(ls.paymentToken).call(
-        abi.encodeWithSelector(
-            ls.paymentToken.transferFrom.selector,
-            msg.sender,
-            address(this),
-            totalCost
-        )
-    );
+        (bool success, bytes memory data) = address(ls.paymentToken).call(
+            abi.encodeWithSelector(
+                ls.paymentToken.transferFrom.selector,
+                msg.sender,
+                address(this),
+                totalCost
+            )
+        );
 
-    require(success && (data.length == 0 || abi.decode(data, (bool))), "Payment failed");
-
-
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "Payment failed");
 
         for (uint i = 0; i < quantity; i++) {
             lottery.status.tickets.push(LibLotteryStorage.Ticket({
@@ -114,7 +112,6 @@ contract LotteryFacet {
             }));
         }
 
-        // gpt yazmamıştı
         lottery.status.purchases.push(LibLotteryStorage.Purchase({
             sticketno: lottery.status.ticketsSold,
             quantity: quantity,

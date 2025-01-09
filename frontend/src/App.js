@@ -18,8 +18,8 @@ const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0xA05bBbdDfa4A0Ac028Ff153F283e73A0A62E088f';
-let TOKEN_ADDRESS = '';
+const DIAMOND_address = '0xB366c38454a6e02Ad10413c1dAAa58F35b9Ed4d2';
+let TOKEN_ADDRESS = '0x9C279a738FFd5344124396De910507Aba2Ed58e6';
  
 
 function App() {
@@ -348,13 +348,13 @@ function App() {
   const buyTicket = async () => {
     const { adminFacetInstance } = await getLotteryContract();
     await getPaymentToken(); // Ensure TOKEN_ADDRESS is set correctly
-    TOKEN_ADDRESS = paymentToken;
+    // TOKEN_ADDRESS = paymentToken;
     console.log("token address:", TOKEN_ADDRESS);
   
-    if (!TOKEN_ADDRESS) {
-      console.error('TOKEN_ADDRESS is not set');
-      return;
-    }
+    // if (!TOKEN_ADDRESS) {
+    //   console.error('TOKEN_ADDRESS is not set');
+    //   return;
+    // }
   
     if (!account) {
       console.error('Account is not set');
@@ -370,7 +370,7 @@ function App() {
         console.log('Token Address:', TOKEN_ADDRESS);
         
         
-        const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, new ethers.providers.Web3Provider(window.ethereum).getSigner());
+        const tokenInstance = new ethers.Contract("0x9C279a738FFd5344124396De910507Aba2Ed58e6", ERC20ABI, new ethers.providers.Web3Provider(window.ethereum).getSigner());
         const approveTx = await tokenInstance.approve(account, totalCost);
         await approveTx.wait();
 
@@ -386,7 +386,7 @@ function App() {
         console.log('Approved token instance');
   
         const winner = await adminFacetInstance.buyTicketTx(
-          4, // lottery_no
+          1, // lottery_no
           1,  
           keccak256(defaultAbiCoder.encode(["uint256"], [123])),  
           { gasLimit: 500000 }

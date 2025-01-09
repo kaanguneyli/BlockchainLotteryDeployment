@@ -55,6 +55,7 @@ async function deployDiamond(flag) {
     "DiamondLoupeFacet",
     "OwnershipFacet",
     "LotteryFacet",
+    "TestToken"
   ];
   const cut = [];
   const selectors = new Set(); // Define selectors set here
