@@ -204,6 +204,33 @@ function App() {
     }
   };
 
+  const mintTokens = async () => {
+    try {
+
+      if (!account) {
+        console.error('Account is not set');
+        return;
+      }
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner(account); // Use the account's signer
+      
+      const tokenAbi = [
+        // Minimal ABI to call mint
+        "function mint(address to, uint256 amount) public"
+    ];
+    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenAbi, signer);
+
+    const amount = ethers.utils.parseUnits("1000", 18); // Mint 1000 tokens with 18 decimals
+
+    const tx = await tokenContract.mint(account, amount);
+    await tx.wait(); // Wait for transaction confirmation
+
+    console.log(`Successfully minted ${amount} tokens to ${account}`);
+    } catch (error) {
+      console.error('Error during token minting:', error);
+    }
+  }
+
   const enterLottery = async () => {
     if (lotteryFacet && account) {
       try {
@@ -346,7 +373,7 @@ function App() {
 
   
   const buyTicket = async () => {
-    await getPaymentToken(); // Ensure TOKEN_ADDRESS is set correctly
+    await getPaymentToken(); 
   
     if (!TOKEN_ADDRESS) {
       console.error('TOKEN_ADDRESS is not set');
@@ -371,23 +398,6 @@ function App() {
   
       // Address of the recipient (contract or address to receive tokens)
       const recipient = tokenInstance.address; // Replace with your recipient contract or address
-      
-
-      /////// MINTS OUR TOKEN, PUT IN A SEPARATE FUNCTION /////
-
-        const tokenAbi = [
-            // Minimal ABI to call mint
-            "function mint(address to, uint256 amount) public"
-        ];
-        const tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenAbi, signer);
-
-        const amount = ethers.utils.parseUnits("1000", 18); // Mint 1000 tokens with 18 decimals
-
-        const tx = await tokenContract.mint(account, amount);
-        await tx.wait(); // Wait for transaction confirmation
-
-        console.log(`Successfully minted ${amount} tokens to ${recipient}`);
-
   
       // Step 1: Approve the recipient to spend tokens on behalf of the account
       const approveTx = await tokenInstance.approve(recipient, capAmount);
@@ -525,6 +535,11 @@ function App() {
             <input type="number" name="random_number" placeholder="Random Number" value={ticketQuery.random_number} onChange={handleBuyTicketChange} />
             <button onClick={buyTicket}>Submit</button>
           </div>
+        </div>
+        <div>
+          <h2>Mint Tokens</h2>
+          <button onClick={mintTokens}>Don't have TT tokens? Mint 1000 Tokens</button>
+
         </div>
 
       </header>
