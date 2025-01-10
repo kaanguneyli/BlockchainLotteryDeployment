@@ -154,8 +154,7 @@ function App() {
       console.error('AdminFacet contract or account is not set');
     }
   };
-  const getLotteryInfo = async () => {
-    const { lottery_no } = ticketQuery;
+  const getLotteryInfo = async (lottery_no) => {
     const {adminFacetInstance} = await getLotteryContract();
 
     if (adminFacetInstance) {
@@ -164,6 +163,7 @@ function App() {
         const result = await adminFacetInstance.getLotteryInfo(lottery_no);
         setLotteryInfo(result);
         console.log('Lottery Info:', result);
+        return result;
       } catch (error) {
         console.error('Error fetching lottery info:', error);
       }
@@ -365,12 +365,6 @@ function App() {
     const { name, value } = e.target;
     setTicketQuery({ ...ticketQuery, [name]: value });
   };
-
-  const handleBuyTicketChange = (e) => {
-    const { name, value } = e.target;
-    setTicket({ ...ticket, [name]: value });
-  }
-
   
   const buyTicket = async () => {
     await getPaymentToken(); 
@@ -386,10 +380,15 @@ function App() {
     }
   
     try {
-      console.log('Preparing to approve the recipient to spend tokens...');
-      const capAmount = ethers.utils.parseEther('0.06'); // The least possible amount
+      const { lottery_no } = ticketQuery; // Get the lottery number from the input
+      const {quantity} = ticketQuery;
+      const lot_info = await getLotteryInfo(lottery_no); // Pass lottery_no to get lottery info
 
-      const smallAmount = ethers.utils.parseEther('0.00001'); // The least possible amount
+      const ticketPrice = (lot_info[4].div(ethers.BigNumber.from("1000000000000000000"))).toNumber();
+
+      console.log('Preparing to approve the recipient to spend tokens...');
+      const amount = ethers.utils.parseEther((ticketPrice*quantity).toString()); // The least possible amount
+
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner(account); // Use the account's signer
   
@@ -400,17 +399,17 @@ function App() {
       const recipient = tokenInstance.address; // Replace with your recipient contract or address
   
       // Step 1: Approve the recipient to spend tokens on behalf of the account
-      const approveTx = await tokenInstance.approve(recipient, capAmount);
+      const approveTx = await tokenInstance.approve(recipient, amount);
       await approveTx.wait();
-      console.log(`Approved ${ethers.utils.formatEther(smallAmount)} tokens for recipient: ${recipient}`);
+      console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);
   
       // Step 2: Transfer the tokens (requires recipient to call `transferFrom`)
       console.log('Initiating the transfer...');
-      const transferTx = await tokenInstance.transfer(recipient, smallAmount, {
+      const transferTx = await tokenInstance.transfer(recipient, amount, {
         gasLimit: 100000, // Adjust based on expected complexity
     });      
     await transferTx.wait();
-      console.log(`Successfully transferred ${ethers.utils.formatEther(smallAmount)} tokens from ${account} to ${recipient}`);
+      console.log(`Successfully transferred tokens from ${account} to ${recipient}`);
     } catch (error) {
       console.error('Error during token transfer:', error);
     }
@@ -472,7 +471,7 @@ function App() {
           {showGetLotteryInfo && (
             <div>
               <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
-              <button onClick={getLotteryInfo}>Submit</button>
+              <button onClick={() => getLotteryInfo(ticketQuery.lottery_no)}>Submit</button>
             </div>
           )}
           {lotteryInfo && <p>Lottery Info: {JSON.stringify(lotteryInfo)}</p>}
@@ -530,9 +529,9 @@ function App() {
         <div>
           <h2>Buy Ticket</h2>
           <div>
-            <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleBuyTicketChange} />
-            <input type="number" name="quantity" placeholder="Quantity" value={ticketQuery.quantity} onChange={handleBuyTicketChange} />
-            <input type="number" name="random_number" placeholder="Random Number" value={ticketQuery.random_number} onChange={handleBuyTicketChange} />
+            <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+            <input type="number" name="quantity" placeholder="Quantity" value={ticketQuery.quantity} onChange={handleTicketQueryChange} />
+            <input type="number" name="random_number" placeholder="Random Number" value={ticketQuery.random_number} onChange={handleTicketQueryChange} />
             <button onClick={buyTicket}>Submit</button>
           </div>
         </div>
