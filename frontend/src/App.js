@@ -346,62 +346,65 @@ function App() {
 
   
   const buyTicket = async () => {
-    const { adminFacetInstance } = await getLotteryContract();
     await getPaymentToken(); // Ensure TOKEN_ADDRESS is set correctly
-    // TOKEN_ADDRESS = paymentToken;
-    console.log("token address:", TOKEN_ADDRESS);
   
-    // if (!TOKEN_ADDRESS) {
-    //   console.error('TOKEN_ADDRESS is not set');
-    //   return;
-    // }
+    if (!TOKEN_ADDRESS) {
+      console.error('TOKEN_ADDRESS is not set');
+      return;
+    }
   
     if (!account) {
       console.error('Account is not set');
       return;
     }
   
-    const { keccak256, defaultAbiCoder } = ethers.utils;
-    if (adminFacetInstance) {
-      try {
-        console.log('Buying tickets...');
-        const totalCost = ethers.utils.parseEther(0.1.toString());
-        console.log('Account:', account);
-        console.log('Token Address:', TOKEN_ADDRESS);
-        
-        
-        const tokenInstance = new ethers.Contract("0x9C279a738FFd5344124396De910507Aba2Ed58e6", ERC20ABI, new ethers.providers.Web3Provider(window.ethereum).getSigner());
-        const approveTx = await tokenInstance.approve(account, totalCost);
-        await approveTx.wait();
+    try {
+      console.log('Preparing to approve the recipient to spend tokens...');
+      const capAmount = ethers.utils.parseEther('0.06'); // The least possible amount
 
-        if (approveTx) {
-          // pay the price from token
-          console.log('Approved token instance');
-          const transferTx = await tokenInstance.transfer(account, ethers.utils.parseEther(0.00001.toString()));
-          await transferTx.wait();
-          console.log('Transferred tokens to contract');
-
-        }
-
-        console.log('Approved token instance');
+      const smallAmount = ethers.utils.parseEther('0.00001'); // The least possible amount
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner(account); // Use the account's signer
   
-        const winner = await adminFacetInstance.buyTicketTx(
-          1, // lottery_no
-          1,  
-          keccak256(defaultAbiCoder.encode(["uint256"], [123])),  
-          { gasLimit: 500000 }
-        );
-        setLotteryWinner(winner);
+      // Create an instance of the ERC20 token
+      const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, signer);
   
-        console.log('Lottery Winner:', winner);
-      } catch (error) {
-        console.error('Error fetching lottery winner:', error);
-      }
-    } else {
-      console.error('AdminFacet contract is not set');
+      // Address of the recipient (contract or address to receive tokens)
+      const recipient = tokenInstance.address; // Replace with your recipient contract or address
+      
+
+      /////// MINTS OUR TOKEN, PUT IN A SEPARATE FUNCTION /////
+
+        const tokenAbi = [
+            // Minimal ABI to call mint
+            "function mint(address to, uint256 amount) public"
+        ];
+        const tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenAbi, signer);
+
+        const amount = ethers.utils.parseUnits("1000", 18); // Mint 1000 tokens with 18 decimals
+
+        const tx = await tokenContract.mint(account, amount);
+        await tx.wait(); // Wait for transaction confirmation
+
+        console.log(`Successfully minted ${amount} tokens to ${recipient}`);
+
+  
+      // Step 1: Approve the recipient to spend tokens on behalf of the account
+      const approveTx = await tokenInstance.approve(recipient, capAmount);
+      await approveTx.wait();
+      console.log(`Approved ${ethers.utils.formatEther(smallAmount)} tokens for recipient: ${recipient}`);
+  
+      // Step 2: Transfer the tokens (requires recipient to call `transferFrom`)
+      console.log('Initiating the transfer...');
+      const transferTx = await tokenInstance.transfer(recipient, smallAmount, {
+        gasLimit: 100000, // Adjust based on expected complexity
+    });      
+    await transferTx.wait();
+      console.log(`Successfully transferred ${ethers.utils.formatEther(smallAmount)} tokens from ${account} to ${recipient}`);
+    } catch (error) {
+      console.error('Error during token transfer:', error);
     }
   };
-
 
   return (
     <div className="App">
