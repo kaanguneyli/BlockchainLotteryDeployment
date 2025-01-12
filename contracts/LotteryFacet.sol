@@ -90,16 +90,18 @@ contract LotteryFacet {
             "Invalid payment token address"
         );
 
-        (bool success, bytes memory data) = address(ls.paymentToken).call(
-            abi.encodeWithSelector(
-                ls.paymentToken.transferFrom.selector,
-                msg.sender,
-                address(this),
-                totalCost
-            )
-        );
+        // (bool success, bytes memory data) = address(ls.paymentToken).call(
+        //     abi.encodeWithSelector(
+        //         ls.paymentToken.transferFrom.selector,
+        //         msg.sender,
+        //         address(this),
+        //         totalCost
+        //     )
+        // );
 
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "Payment failed");
+        // require(success && (data.length == 0 || abi.decode(data, (bool))), "Payment failed");
+
+        require(ls.paymentToken.transferFrom(msg.sender, address(this), totalCost), "Payment failed");
 
         for (uint i = 0; i < quantity; i++) {
             lottery.status.tickets.push(LibLotteryStorage.Ticket({
