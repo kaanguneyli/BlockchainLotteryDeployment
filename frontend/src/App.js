@@ -12,14 +12,16 @@ import LotteryFacetABI from './ABIs/LotteryFacet.json';
 import QueryFacetABI from './ABIs/QueryFacet.json';
 import Main_Facet_ABI from './ABIs/MainFacet.json';
 import ERC20ABI from './ABIs/ERC20ABI.json';
+const { keccak256, defaultAbiCoder } = ethers.utils;
+
 
 /* const LOTTERY_FACET_ADDRESS = '0x0165878a594ca255338adfa4d48449f69242eb8f';
 const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0xB366c38454a6e02Ad10413c1dAAa58F35b9Ed4d2';
-let TOKEN_ADDRESS = '0x9C279a738FFd5344124396De910507Aba2Ed58e6';
+const DIAMOND_address = '0x3e1292d9fFD16E9B92c66D62efC0A9fb7aEc10e6';
+let TOKEN_ADDRESS = '0x9CcC135e279dA5EaFa4CA1EEFbc88CC747E84303';
  
 
 function App() {
@@ -391,25 +393,23 @@ function App() {
 
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner(account); // Use the account's signer
+   
+    const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
+
   
       // Create an instance of the ERC20 token
       const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, signer);
   
       // Address of the recipient (contract or address to receive tokens)
-      const recipient = tokenInstance.address; // Replace with your recipient contract or address
+      const recipient = DIAMOND_address; // Replace with your recipient contract or address
   
       // Step 1: Approve the recipient to spend tokens on behalf of the account
       const approveTx = await tokenInstance.approve(recipient, amount);
       await approveTx.wait();
       console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);
   
-      // Step 2: Transfer the tokens (requires recipient to call `transferFrom`)
-      console.log('Initiating the transfer...');
-      const transferTx = await tokenInstance.transfer(recipient, amount, {
-        gasLimit: 100000, // Adjust based on expected complexity
-    });      
-    await transferTx.wait();
-      console.log(`Successfully transferred tokens from ${account} to ${recipient}`);
+   await adminFacetInstance.buyTicketTx(lottery_no, quantity,  keccak256(defaultAbiCoder.encode(["address", "uint256"], [account, 123])), { gasLimit: 5000000 });
+
     } catch (error) {
       console.error('Error during token transfer:', error);
     }
