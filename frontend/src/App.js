@@ -199,7 +199,16 @@ function App() {
       try {
         console.log(`Fetching lottery info for lottery ${lottery_no}...`);
         const result = await adminFacetInstance.getLotteryInfo(lottery_no);
-        setLotteryInfo(result);
+
+        const formattedResult = {
+        startTime: result[0].toString(), // Convert BigNumber to string
+        totalTickets: result[1].toString(), // Convert BigNumber to string
+        winnersCount: result[2].toString(), // Convert BigNumber to string
+        minPercentage: result[3].toString(), // Convert BigNumber to string
+        ticketPrice: ethers.utils.formatEther(result[4]) // Convert BigNumber to string
+      };
+
+      setLotteryInfo(formattedResult);
         console.log('Lottery Info:', result);
         return result;
       } catch (error) {
@@ -232,7 +241,8 @@ function App() {
       try {
         console.log(`Fetching lottery URL for lottery ${lottery_no}...`);
         const result = await adminFacetInstance.getLotteryURL(lottery_no);
-        setLotteryURL(result);
+
+        setLotteryURL(result[1]);
         console.log('Lottery URL:', result);
       } catch (error) {
         console.error('Error fetching lottery URL:', error);
@@ -491,7 +501,7 @@ function App() {
       const approveTx = await tokenInstance.approve(recipient, amount);
       await approveTx.wait();
       console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);  
-      await adminFacetInstance.buyTicketTx(lottery_no, quantity,  random_number, { gasLimit: 5000000 });
+      await adminFacetInstance.buyTicketTx(parseInt(lottery_no),parseInt(quantity),  random_number, { gasLimit: 5000000 });
       adminFacetInstance.on("TicketPurchased", (lotteryNo, sticketno, buyer, quantity) => {
         setLotteryNo(lotteryNo);
         setSticketNo(sticketno-quantity);
@@ -658,15 +668,6 @@ function App() {
             </div>
           )}
         </div>
-        <div>
-          <h2>Enter Lottery</h2>
-          <button onClick={enterLottery}>Enter Lottery</button>
-        </div>
-        <div>
-          <h2>Get Lottery Winner</h2>
-          <button onClick={getLotteryWinner}>Get Lottery Winner</button>
-          {lotteryWinner && <p>Lottery Winner: {lotteryWinner}</p>}
-        </div>
        
         <div>
           <h2>Get Lottery Info</h2>
@@ -677,7 +678,15 @@ function App() {
               <button onClick={() => getLotteryInfo(ticketQuery.lottery_no)}>Submit</button>
             </div>
           )}
-          {lotteryInfo && <p>Lottery Info: {JSON.stringify(lotteryInfo)}</p>}
+          {lotteryInfo && (
+              <div>
+                <p>Start Time: {lotteryInfo.startTime}</p>
+                <p>Total Tickets: {lotteryInfo.totalTickets}</p>
+                <p>Winners Count: {lotteryInfo.winnersCount}</p>
+                <p>Minimum Percentage: {lotteryInfo.minPercentage}</p>
+                <p>Ticket Price: {lotteryInfo.ticketPrice} ETH</p>
+              </div>
+            )}
         </div>
         <div>
           <h2>Get Lottery Sales</h2>
