@@ -62,7 +62,7 @@ function App() {
   });
 
   const [tokenAddress, setTokenAddress] = useState('');
-  const [ticketQuery, setTicketQuery] = useState({ i: '', lottery_no: '' , rand: 0});
+  const [ticketQuery, setTicketQuery] = useState({ i: '', lottery_no: '' , rand: 0, sticket_no: 0});
 
   const [showCreateLottery, setShowCreateLottery] = useState(false);
   const [showSetPaymentToken, setShowSetPaymentToken] = useState(false);
@@ -362,8 +362,8 @@ function App() {
     }
   }
 
-  const getIthPurchasedTicketTx = async () => {
-    const { i, lottery_no } = ticketQuery;
+  const getIthPurchasedTicketTx = async ( i ) => {
+    const { lottery_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
   
     if (adminFacetInstance) {
@@ -397,6 +397,47 @@ function App() {
     }
   };
   
+
+  const withdrawRefund = async() => {
+    const { lottery_no } = ticketQuery;
+    const { sticket_no } = ticketQuery;
+    const { adminFacetInstance } = await getLotteryContract();
+    console.log(sticket_no);
+    await getIthPurchasedTicketTx(ethers.BigNumber.from(sticket_no).toNumber()+1);  
+    const lot_info = await getLotteryInfo(lottery_no); // Pass lottery_no to get lottery info
+    var quantity = (ticketData[1].toNumber());
+    const ticket_price = (lot_info[4].div(ethers.BigNumber.from("1000000000000000000"))).toNumber();
+
+     try {
+    
+      if (!account) {
+        console.error('Account is not set');
+        return;
+      }
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner(account); // Use the account's signer
+      
+      const tokenAbi = [
+        // Minimal ABI to call mint and burn
+        "function mint(address to, uint256 amount) public",
+        "function burn(uint256 amount) public"
+
+    ];
+    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenAbi, signer);
+
+    const amount = ethers.utils.parseUnits((quantity*ticket_price).toString(), 18); 
+
+    // TODO: CALL THE REFUND IN SOLIDITY BEFORE THE TRANSFERS
+    const tx = await tokenContract.mint(account, amount);
+    await tx.wait(); // Wait for transaction confirmation
+
+    const tx2 = await tokenContract.burn(DIAMOND_address, amount);
+    await tx2.wait(); // Wait for transaction confirmation
+  } catch (error){
+    console.error("Failed to withdraw refund", error);
+  }
+  }
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setLotteryParams({ ...lotteryParams, [name]: value });
@@ -453,7 +494,7 @@ function App() {
       await adminFacetInstance.buyTicketTx(lottery_no, quantity,  random_number, { gasLimit: 5000000 });
       adminFacetInstance.on("TicketPurchased", (lotteryNo, sticketno, buyer, quantity) => {
         setLotteryNo(lotteryNo);
-        setSticketNo(sticketno);
+        setSticketNo(sticketno-quantity);
         setBuyer(buyer);
         setQuantity(quantity);
       });
@@ -626,18 +667,7 @@ function App() {
           <button onClick={getLotteryWinner}>Get Lottery Winner</button>
           {lotteryWinner && <p>Lottery Winner: {lotteryWinner}</p>}
         </div>
-        <div>
-          <h2>Get Ticket Data</h2>
-          <button onClick={() => setShowGetTicketData(!showGetTicketData)}>Get Ticket Data</button>
-          {showGetTicketData && (
-            <div>
-              <input type="text" name="i" placeholder="Ticket Index" value={ticketQuery.i} onChange={handleTicketQueryChange} />
-              <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
-              <button onClick={getIthPurchasedTicketTx}>Submit</button>
-            </div>
-          )}
-          {ticketData && <p>Ticket Data: {JSON.stringify(ticketData)}</p>}
-        </div>
+       
         <div>
           <h2>Get Lottery Info</h2>
           <button onClick={() => setShowGetLotteryInfo(!showGetLotteryInfo)}>Get Lottery Info</button>
@@ -826,6 +856,18 @@ function App() {
             {addrTicketCheckError && <p style={{ color: 'red' }}>{addrTicketCheckError}</p>}
           </div>
         </div>
+
+        
+        <div>
+          <h2>Refund Ticket</h2>
+          <div>
+            <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+            <input type="number" name="sticket_no" placeholder="sticketNo" value={ticketQuery.sticket_no} onChange={handleTicketQueryChange} />
+            <button onClick={withdrawRefund}>Submit</button>
+            </div>
+        </div>
+
+
 
         <div>
           <h2>Get Ith Winning Ticket</h2>
