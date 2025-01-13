@@ -20,8 +20,8 @@ const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0x3e1292d9fFD16E9B92c66D62efC0A9fb7aEc10e6';
-let TOKEN_ADDRESS = '0x9CcC135e279dA5EaFa4CA1EEFbc88CC747E84303';
+const DIAMOND_address = '0x03Ba40c20d2F6fB49372c9943E465525D3946F53';
+let TOKEN_ADDRESS = '0x7F3eDb6A597D2C60083B0d5ffD836c46e4D86823';
  
 
 function App() {
@@ -496,6 +496,11 @@ function App() {
     if (adminFacetInstance) {
       // try {
         console.log(`Revealing random number for lottery ${lottery_no}...`);
+        console.log("rnd_number JS:", parseInt(rnd_number), "Type:", typeof parseInt(rnd_number));
+        const computedHash = ethers.utils.keccak256(
+          ethers.utils.defaultAbiCoder.encode(["address", "uint256"], [account, parseInt(rnd_number)])
+        );
+        console.log("Computed Hash:", computedHash);        
         const tx = await adminFacetInstance.revealRndNumberTx(
           parseInt(lottery_no),
           parseInt(sticketno),
