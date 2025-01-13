@@ -126,7 +126,7 @@ contract LotteryFacet {
 
     function revealRndNumberTx(uint lottery_no, uint sticketno, uint quantity, uint rnd_number) external {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
-        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");     // gpt yazmamıştı
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
 
         LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
 
@@ -326,8 +326,8 @@ contract LotteryFacet {
     }
 
     function getLotteryCount() public view returns (uint) {
-    LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
-    return ls.lotteryCount;
+        LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
+        return ls.lotteryCount;
     }
 
     function getNumPurchaseTxs(uint lottery_no) public view returns (uint) {

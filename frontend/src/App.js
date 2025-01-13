@@ -57,7 +57,6 @@ function App() {
 
   const [tokenAddress, setTokenAddress] = useState('');
   const [ticketQuery, setTicketQuery] = useState({ i: '', lottery_no: '' });
-
   const [showCreateLottery, setShowCreateLottery] = useState(false);
   const [showSetPaymentToken, setShowSetPaymentToken] = useState(false);
   const [showEnterLottery, setShowEnterLottery] = useState(false);
@@ -70,8 +69,34 @@ function App() {
   const [showGetPaymentToken, setShowGetPaymentToken] = useState(false);
   const [showGetStartTime, setShowGetStartTime] = useState(false);
   const [tokenInstance, setTokenContract] = useState(null);
-  
 
+  const [ticketCheckResult, setTicketCheckResult] = useState(null);
+  const [ticketCheckParams, setTicketCheckParams] = useState({
+    lottery_no: '',
+    ticketNo: ''
+  });
+  const [ticketCheckError, setTicketCheckError] = useState(null);
+  const [revealParams, setRevealParams] = useState({
+    lottery_no: '',
+    sticketno: '',
+    quantity: '',
+    rnd_number: '',
+  });
+  const [revealRndError, setRevealRndError] = useState(null);
+  const [checkAddrParams, setCheckAddrParams] = useState({
+    addr: '',
+    lottery_no: '',
+    ticketNo: '',
+  });
+  const [addrTicketCheckResult, setAddrTicketCheckResult] = useState(null);
+  const [addrTicketCheckError, setAddrTicketCheckError] = useState(null);
+  const [winningTicketParams, setWinningTicketParams] = useState({
+    lottery_no: '',
+    i: ''
+  });
+  const [winningTicketResult, setWinningTicketResult] = useState(null);
+  const [winningTicketError, setWinningTicketError] = useState(null);
+    
 
   const getLotteryContract = async () => {
     if (!window.ethereum) throw new Error("Metamask is not installed");
@@ -353,7 +378,6 @@ function App() {
     }
   };
   
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setLotteryParams({ ...lotteryParams, [name]: value });
@@ -383,7 +407,7 @@ function App() {
   
     try {
       const { lottery_no } = ticketQuery; // Get the lottery number from the input
-      const {quantity} = ticketQuery;
+      const { quantity } = ticketQuery;
       const lot_info = await getLotteryInfo(lottery_no); // Pass lottery_no to get lottery info
 
       const ticketPrice = (lot_info[4].div(ethers.BigNumber.from("1000000000000000000"))).toNumber();
@@ -394,9 +418,8 @@ function App() {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner(account); // Use the account's signer
    
-    const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
+      const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
 
-  
       // Create an instance of the ERC20 token
       const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, signer);
   
@@ -408,12 +431,130 @@ function App() {
       await approveTx.wait();
       console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);
   
-   await adminFacetInstance.buyTicketTx(lottery_no, quantity,  keccak256(defaultAbiCoder.encode(["address", "uint256"], [account, 123])), { gasLimit: 5000000 });
+      await adminFacetInstance.buyTicketTx(lottery_no, quantity, keccak256(defaultAbiCoder.encode(["address", "uint256"], [account, 123])), { gasLimit: 5000000 });
 
     } catch (error) {
       console.error('Error during token transfer:', error);
     }
   };
+
+  const handleTicketCheckChange = (e) => {
+    const { name, value } = e.target;
+    setTicketCheckParams({ ...ticketCheckParams, [name]: value });
+  };
+  
+  const checkIfMyTicketWon = async () => {
+    const { lottery_no, ticketNo } = ticketCheckParams;
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    setTicketCheckError(null); // Reset the error state before making the call
+  
+    try {
+      console.log(`Checking if ticket ${ticketNo} in lottery ${lottery_no} has won...`);
+      const result = await adminFacetInstance.checkIfMyTicketWon(parseInt(lottery_no), parseInt(ticketNo));
+      setTicketCheckResult(result);
+      console.log('Ticket Check Result:', result);
+    } catch (error) {
+      console.error('Error checking if ticket won:', error);
+      setTicketCheckError(error.message || 'An error occurred while checking your ticket.');
+    }
+  };
+
+  const handleRevealInputChange = (e) => {
+    const { name, value } = e.target;
+    setRevealParams({ ...revealParams, [name]: value });
+  };
+
+  const revealRandomNumber = async () => {
+    const { lottery_no, sticketno, quantity, rnd_number } = revealParams;
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    if (adminFacetInstance) {
+      // try {
+        console.log(`Revealing random number for lottery ${lottery_no}...`);
+        const tx = await adminFacetInstance.revealRndNumberTx(
+          parseInt(lottery_no),
+          parseInt(sticketno),
+          parseInt(quantity),
+          parseInt(rnd_number),
+          { gasLimit: 10000000 }
+        );
+        await tx.wait();
+        console.log('Random number revealed successfully');
+        setRevealRndError(null); // Clear any previous error
+      // } catch (error) {
+      //   console.error('Error revealing random number:', error);
+      //   const errorMessage = error?.reason || error?.data?.message || 'An error occurred. Please check your inputs and try again.';
+      //   setRevealRndError(errorMessage);
+      // }
+    } else {
+      console.error('AdminFacet contract or account is not set');
+      setRevealRndError('AdminFacet contract or account is not set');
+    }
+  };
+
+  const handleAddrCheckInputChange = (e) => {
+    const { name, value } = e.target;
+    setCheckAddrParams({ ...checkAddrParams, [name]: value });
+  };
+
+  const checkIfAddrTicketWon = async () => {
+    const { addr, lottery_no, ticketNo } = checkAddrParams;
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    setAddrTicketCheckError(null); // Reset the error state before making the call
+  
+    if (adminFacetInstance) {
+      try {
+        console.log(`Checking if address ${addr}'s ticket ${ticketNo} in lottery ${lottery_no} has won...`);
+        const result = await adminFacetInstance.checkIfAddrTicketWon(
+          addr,
+          parseInt(lottery_no),
+          parseInt(ticketNo)
+        );
+        setAddrTicketCheckResult(result);
+        console.log('Address Ticket Check Result:', result);
+      } catch (error) {
+        console.error('Error checking if address ticket won:', error);
+        setAddrTicketCheckError(error.message || 'An error occurred while checking the address ticket.');
+      }
+    } else {
+      console.error('AdminFacet contract or account is not set');
+      setAddrTicketCheckError('AdminFacet contract or account is not set');
+    }
+  };
+
+  const handleWinningTicketInputChange = (e) => {
+    const { name, value } = e.target;
+    setWinningTicketParams({ ...winningTicketParams, [name]: value });
+  };
+
+  const getIthWinningTicket = async () => {
+    const { lottery_no, i } = winningTicketParams;
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    setWinningTicketError(null); // Reset the error state before making the call
+  
+    if (adminFacetInstance) {
+      try {
+        console.log(`Fetching the ${i}th winning ticket for lottery ${lottery_no}...`);
+        const ticketNo = await adminFacetInstance.getIthWinningTicket(
+          parseInt(lottery_no),
+          parseInt(i)
+        );
+        setWinningTicketResult(ticketNo.toString());
+        console.log('Winning Ticket Number:', ticketNo.toString());
+      } catch (error) {
+        console.error('Error fetching winning ticket:', error);
+        // Display meaningful error messages
+        setWinningTicketError(error.message || 'An error occurred while fetching the winning ticket.');
+      }
+    } else {
+      console.error('AdminFacet contract or account is not set');
+      setWinningTicketError('AdminFacet contract or account is not set');
+    }
+  };
+  
 
   return (
     <div className="App">
@@ -525,7 +666,6 @@ function App() {
           )}
           {startTime && <p>Start Time: {startTime.toString()}</p>}
         </div>
-
         <div>
           <h2>Buy Ticket</h2>
           <div>
@@ -539,6 +679,128 @@ function App() {
           <h2>Mint Tokens</h2>
           <button onClick={mintTokens}>Don't have TT tokens? Mint 1000 Tokens</button>
 
+        </div>
+
+        <div>
+          <h2>Reveal Random Number</h2>
+          <div>
+            <input
+              type="text"
+              name="lottery_no"
+              placeholder="Lottery Number"
+              value={revealParams.lottery_no}
+              onChange={handleRevealInputChange}
+            />
+            <input
+              type="text"
+              name="sticketno"
+              placeholder="Starting Ticket Number"
+              value={revealParams.sticketno}
+              onChange={handleRevealInputChange}
+            />
+            <input
+              type="text"
+              name="quantity"
+              placeholder="Quantity"
+              value={revealParams.quantity}
+              onChange={handleRevealInputChange}
+            />
+            <input
+              type="text"
+              name="rnd_number"
+              placeholder="Random Number"
+              value={revealParams.rnd_number}
+              onChange={handleRevealInputChange}
+            />
+            <button onClick={revealRandomNumber}>Submit</button>
+            {revealRndError && <p style={{ color: 'red' }}>{revealRndError}</p>}
+          </div>
+        </div>
+
+        <div>
+          <h2>Check If My Ticket Won</h2>
+          <div>
+            <input
+              type="text"
+              name="lottery_no"
+              placeholder="Lottery Number"
+              value={ticketCheckParams.lottery_no}
+              onChange={handleTicketCheckChange}
+            />
+            <input
+              type="text"
+              name="ticketNo"
+              placeholder="Ticket Number"
+              value={ticketCheckParams.ticketNo}
+              onChange={handleTicketCheckChange}
+            />
+            <button onClick={checkIfMyTicketWon}>Check</button>
+          </div>
+          {ticketCheckResult !== null && (
+            <p>{ticketCheckResult ? "Your ticket won!" : "Better luck next time!"}</p>
+          )}
+          {ticketCheckError && (
+            <p style={{ color: 'red' }}>{ticketCheckError}</p>
+          )}
+        </div>
+
+        <div>
+          <h2>Check If Address Ticket Won</h2>
+          <div>
+            <input
+              type="text"
+              name="addr"
+              placeholder="Address"
+              value={checkAddrParams.addr}
+              onChange={handleAddrCheckInputChange}
+            />
+            <input
+              type="text"
+              name="lottery_no"
+              placeholder="Lottery Number"
+              value={checkAddrParams.lottery_no}
+              onChange={handleAddrCheckInputChange}
+            />
+            <input
+              type="text"
+              name="ticketNo"
+              placeholder="Ticket Number"
+              value={checkAddrParams.ticketNo}
+              onChange={handleAddrCheckInputChange}
+            />
+            <button onClick={checkIfAddrTicketWon}>Check</button>
+            {addrTicketCheckResult !== null && (
+              <p>{addrTicketCheckResult ? "This ticket won!" : "This ticket did not win."}</p>
+            )}
+            {addrTicketCheckError && <p style={{ color: 'red' }}>{addrTicketCheckError}</p>}
+          </div>
+        </div>
+
+        <div>
+          <h2>Get Ith Winning Ticket</h2>
+          <div>
+            <input
+              type="text"
+              name="lottery_no"
+              placeholder="Lottery Number"
+              value={winningTicketParams.lottery_no}
+              onChange={handleWinningTicketInputChange}
+            />
+            <input
+              type="text"
+              name="i"
+              placeholder="Index of Winner"
+              value={winningTicketParams.i}
+              onChange={handleWinningTicketInputChange}
+            />
+            <button onClick={getIthWinningTicket}>Check</button>
+            {winningTicketResult !== null && (
+              <p>Winning Ticket Number: {winningTicketResult}</p>
+            )}
+            {winningTicketError && (
+              <p style={{ color: 'red' }}>{winningTicketError}</p>
+            )}
+          </div>
         </div>
 
       </header>
