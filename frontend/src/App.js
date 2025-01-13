@@ -39,6 +39,12 @@ function App() {
   const [numPurchaseTxs, setNumPurchaseTxs] = useState(null);
   const [paymentToken, setPaymentTokenState] = useState(null);
   const [startTime, setStartTime] = useState(null);
+  const [hashedRandom, setHashedRandom] = useState(null);
+  const [lotteryNo, setLotteryNo] = useState(null);
+  const [sticketNo, setSticketNo] = useState(null);
+  const [buyer, setBuyer] = useState(null);
+  const [quantity, setQuantity] = useState(null);
+
   const [ticket, setTicket] = useState({
     lottery_no: '',
     quantity: '',
@@ -56,7 +62,7 @@ function App() {
   });
 
   const [tokenAddress, setTokenAddress] = useState('');
-  const [ticketQuery, setTicketQuery] = useState({ i: '', lottery_no: '' });
+  const [ticketQuery, setTicketQuery] = useState({ i: '', lottery_no: '' , rand: 0});
 
   const [showCreateLottery, setShowCreateLottery] = useState(false);
   const [showSetPaymentToken, setShowSetPaymentToken] = useState(false);
@@ -144,6 +150,10 @@ function App() {
             { gasLimit: 500000 }
         );
         console.log("Transaction sent, waiting for confirmation...");
+        adminFacetInstance.on("LotteryCreated", (lottery_no) => {
+          console.log("Lottery Created with No:", lottery_no.toString());
+          setLotteryNo(lottery_no.toString()); // Update state with the lottery_no
+        });
 
         await tx.wait();
         console.log('Lottery created');
@@ -317,7 +327,15 @@ function App() {
       console.error('AdminFacet contract is not set');
     }
   };
-  
+
+  const getHashedRandom = async () => {
+    const { random_n } = ticketQuery;
+    if (account) {
+      var value = keccak256(defaultAbiCoder.encode(["address", "uint256"], [account, random_n]));
+      setHashedRandom(value);
+    }
+  }
+
   const getIthPurchasedTicketTx = async () => {
     const { i, lottery_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
@@ -365,8 +383,8 @@ function App() {
 
   const handleTicketQueryChange = (e) => {
     const { name, value } = e.target;
-    setTicketQuery({ ...ticketQuery, [name]: value });
-  };
+    setTicketQuery(prevState => ({ ...prevState, [name]: value }));
+    ;  };
   
   const buyTicket = async () => {
     await getPaymentToken(); 
@@ -384,6 +402,7 @@ function App() {
     try {
       const { lottery_no } = ticketQuery; // Get the lottery number from the input
       const {quantity} = ticketQuery;
+      const {random_number} = ticketQuery;
       const lot_info = await getLotteryInfo(lottery_no); // Pass lottery_no to get lottery info
 
       const ticketPrice = (lot_info[4].div(ethers.BigNumber.from("1000000000000000000"))).toNumber();
@@ -406,14 +425,20 @@ function App() {
       // Step 1: Approve the recipient to spend tokens on behalf of the account
       const approveTx = await tokenInstance.approve(recipient, amount);
       await approveTx.wait();
-      console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);
-  
-   await adminFacetInstance.buyTicketTx(lottery_no, quantity,  keccak256(defaultAbiCoder.encode(["address", "uint256"], [account, 123])), { gasLimit: 5000000 });
-
+      console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);  
+      await adminFacetInstance.buyTicketTx(lottery_no, quantity,  random_number, { gasLimit: 5000000 });
+      adminFacetInstance.on("TicketPurchased", (lotteryNo, sticketno, buyer, quantity) => {
+        setLotteryNo(lotteryNo);
+        setSticketNo(sticketno);
+        setBuyer(buyer);
+        setQuantity(quantity);
+      });
     } catch (error) {
       console.error('Error during token transfer:', error);
     }
   };
+
+
 
   return (
     <div className="App">
@@ -427,10 +452,13 @@ function App() {
               <input type="text" name="nooftickets" placeholder="Number of Tickets" value={lotteryParams.nooftickets} onChange={handleInputChange} />
               <input type="text" name="noofwinners" placeholder="Number of Winners" value={lotteryParams.noofwinners} onChange={handleInputChange} />
               <input type="text" name="minpercentage" placeholder="Minimum Percentage" value={lotteryParams.minpercentage} onChange={handleInputChange} />
-              <input type="text" name="ticketprice" placeholder="Ticket Price (ETH)" value={lotteryParams.ticketprice} onChange={handleInputChange} />
+              <input type="text" name="ticketprice" placeholder="Ticket Price (TT)" value={lotteryParams.ticketprice} onChange={handleInputChange} />
               <input type="text" name="htmlhash" placeholder="HTML Hash" value={lotteryParams.htmlhash} onChange={handleInputChange} />
               <input type="text" name="url" placeholder="URL" value={lotteryParams.url} onChange={handleInputChange} />
               <button onClick={createLottery}>Submit</button>
+
+              {lotteryNo && <p>Newly Created Lottery Number: {lotteryNo.toString()}</p>}
+
             </div>
           )}
         </div>
@@ -527,14 +555,32 @@ function App() {
         </div>
 
         <div>
+      <h2>Get Hashed Number</h2>
+      <input
+        type="number"
+        name="random_n"
+        placeholder="Random Number"
+        value={ticketQuery.random_n}
+        onChange={handleTicketQueryChange}
+      />
+      <button onClick={getHashedRandom}>Submit</button>
+      <p>Your Hashed Number: {hashedRandom}</p>
+    </div>
+
+        <div>
           <h2>Buy Ticket</h2>
           <div>
             <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
             <input type="number" name="quantity" placeholder="Quantity" value={ticketQuery.quantity} onChange={handleTicketQueryChange} />
-            <input type="number" name="random_number" placeholder="Random Number" value={ticketQuery.random_number} onChange={handleTicketQueryChange} />
+            <input type="text" name="random_number" placeholder="Random Number" value={ticketQuery.random_number} onChange={handleTicketQueryChange} />
             <button onClick={buyTicket}>Submit</button>
-          </div>
+            {lotteryNo && <p>Purshased for lottery number: {lotteryNo.toString()}</p>}
+            {sticketNo && <p>Your sticketNo - save this for your reveal: {sticketNo.toString()}</p>}
+            {buyer && <p>Address of purchase: {buyer.toString()}</p>}
+            {quantity && <p>Quantity of tickets in this set: {quantity.toString()}</p>}
+            </div>
         </div>
+
         <div>
           <h2>Mint Tokens</h2>
           <button onClick={mintTokens}>Don't have TT tokens? Mint 1000 Tokens</button>
