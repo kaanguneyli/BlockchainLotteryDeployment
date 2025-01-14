@@ -261,8 +261,6 @@ contract LotteryFacet {
             ticket.isRefunded = true;
         }
 
-        uint refundAmount = ticket.quantity * lottery.details.ticketprice;
-        require(lottery.details.paymentToken.transfer(msg.sender, refundAmount), "Refund failed");
     }
 
     function createLottery(
@@ -325,10 +323,6 @@ contract LotteryFacet {
 
         require(block.timestamp >= lottery.details.unixEnd, "Lottery not ended");
         require(!lottery.status.isCancelled, "Lottery was cancelled");
-
-        uint proceeds = lottery.status.ticketsSold * lottery.details.ticketprice;
-        require(ls.paymentToken.transfer(msg.sender, proceeds), "Withdrawal failed");
-
         // emit ProceedsWithdrawn(lottery_no, proceeds);
     }
 
