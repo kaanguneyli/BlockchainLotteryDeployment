@@ -14,15 +14,11 @@ describe("LotteryFacet", function () {
         const TestToken = await ethers.getContractFactory("TestToken");
         testToken = await TestToken.deploy();
         await testToken.deployed();
-        console.log("TestToken deployed at:", testToken.address);
     
         // Deploy LotteryFacet contract with required arguments
         const LotteryFacet = await ethers.getContractFactory("LotteryFacet");
         companyLotteries = await LotteryFacet.deploy();
     
-        // Ensure LotteryFacet is deployed successfully
-        console.log("LotteryFacet deployed to:", companyLotteries.address);
-
         // Set the payment token using the owner address
         await companyLotteries.connect(owner).setPaymentToken(testToken.address);
     });
@@ -51,7 +47,7 @@ describe("LotteryFacet", function () {
         const receipt = await tx.wait();
 
         // Validate lottery creation (checking lotteryCount)
-        var lotteryNo = await companyLotteries.getCurrentLotteryNo();
+        var lotteryNo = await companyLotteries.getLotteryCount();
         expect(lotteryNo.toNumber()).to.equal(1);
 
         // Validate event emission
@@ -145,7 +141,7 @@ describe("LotteryFacet", function () {
           htmlHash,
           url
         );
-        var lotteryNo = await companyLotteries.getCurrentLotteryNo();
+        var lotteryNo = await companyLotteries.getLotteryCount();
         expect(lotteryNo.toNumber()).to.equal(1);
       });
 
@@ -307,7 +303,7 @@ describe("LotteryFacet", function () {
     
         // Check if the error contains the expected revert message
         expect(error).to.be.an("error");
-        expect(error.message).to.include("Payment failed");
+        expect(error.message).to.include("InsufficientAllowance");
     });
 
     it("should allow fuzz testing for buyTicketTx with random values", async function () {
@@ -465,7 +461,7 @@ describe("LotteryFacet", function () {
         );
     
         // Validate the current lottery number
-        const currentLotteryNo = await companyLotteries.getCurrentLotteryNo();
+        const currentLotteryNo = await companyLotteries.getLotteryCount();
         expect(currentLotteryNo.toNumber()).to.equal(1);
     });
     
@@ -571,7 +567,6 @@ describe("LotteryFacet", function () {
 
         // Get the payment token address
         const paymentTokenAddress = await companyLotteries.getPaymentToken();
-        console.log(paymentTokenAddress);
         // Validate the result
         expect(paymentTokenAddress).to.equal(testToken.address);
     });
@@ -849,59 +844,5 @@ it("should fail to reveal random number for a lottery that doesn't exist", async
     // Assert that the error message is as expected (Invalid lottery number)
     expect(result.message).to.include("Invalid lottery number");
 });
-
-// it.only("should correctly check if my ticket won after reveal", async function () {
-//     const unixEnd = Math.floor(Date.now() / 1000) + 1000; // 1000 seconds from now
-//     const noOfTickets = 100;
-//     const quantity = 1; // We want all tickets to win for simplicity
-//     const minPercentage = 3;
-//     const ticketPrice = ethers.utils.parseEther("1"); // 1 token per ticket
-
-//     // Create lottery
-//     await companyLotteries
-//         .connect(owner)
-//         .createLottery(unixEnd, noOfTickets, quantity, minPercentage, ticketPrice, ethers.constants.HashZero, "https://example.com");
-
-//     // Mint tokens to user and approve for ticket purchase
-//     await testToken.connect(owner).mint(user.address, ethers.utils.parseEther("10"));
-//     await testToken.connect(user).approve(companyLotteries.address, ethers.utils.parseEther((quantity * ticketPrice).toString()));
-
-//     // Buy tickets
-//     const lotteryNo = 1;
-//     const hashSeed = 123;
-//     const hashRndNumber = ethers.utils.solidityKeccak256(
-//         ["address", "uint256"],
-//         [user.address, hashSeed]
-//     );
-//     const tx = await companyLotteries.connect(user).buyTicketTx(lotteryNo, 3, hashRndNumber);
-//     const receipt = await tx.wait();
-//     const event = receipt.events.find((e) => e.event === "TicketPurchased");
-
-//     // Fast-forward to the reveal period
-//     const startTime = await companyLotteries.getStartTime(lotteryNo);
-//     const timeToWarp = Math.floor((unixEnd - startTime.toNumber()) / 2); // Halfway point
-//     await network.provider.send("evm_increaseTime", [timeToWarp]);
-//     await network.provider.send("evm_mine");
-
-//     // Reveal the random number for the tickets
-//     await companyLotteries.connect(user).revealRndNumberTx(lotteryNo, event.args.sticketno, event.args.quantity, hashSeed);
-//     const winnerEvent = receipt.events.find(event => event.event === "WinnersAnnounced");
-//     console.log(winnerEvent.args.winningTicket.toString());
-
-//     // Fast-forward to the end of the lottery
-//     await network.provider.send("evm_increaseTime", [unixEnd]);
-//     await network.provider.send("evm_mine");
-
-//     // Check if the tickets won (all of them should win)
-//     const ticket1Won = await companyLotteries.checkIfMyTicketWon(lotteryNo, event.args.sticketno);
-//     const ticket2Won = await companyLotteries.checkIfMyTicketWon(lotteryNo, event.args.sticketno.add(1));  // Ticket 1 + 1
-//     const ticket3Won = await companyLotteries.checkIfMyTicketWon(lotteryNo, event.args.sticketno.add(2));  // Ticket 1 + 2
-
-//     // Assert that all tickets won
-//     expect(ticket1Won).to.be.true;
-//     expect(ticket2Won).to.be.true;
-//     expect(ticket3Won).to.be.true;
-// });
-
 
 });

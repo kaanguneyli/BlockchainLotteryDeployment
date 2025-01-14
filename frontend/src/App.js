@@ -391,24 +391,6 @@ function App() {
       setHashedRandom(value);
     }
   }
-
-  // Function to get the purchased ticket from index
-  // const getIthPurchasedTicketTx = async ( i ) => {
-  //   const { lottery_no } = ticketQuery;
-  //   const { adminFacetInstance } = await getLotteryContract();
-  //   if (adminFacetInstance) {
-  //     try {
-  //       console.log(`Fetching ticket data for lottery ${lottery_no}, ticket ${i}...`);
-  //       const result = await adminFacetInstance.getIthPurchasedTicketTx(i, lottery_no);
-  //       setTicketData(result);
-  //       console.log('Ticket Data:', result);
-  //     } catch (error) {
-  //       console.error('Error fetching ticket data:', error);
-  //     }
-  //   } else {
-  //     console.error('AdminFacet contract is not set');
-  //   }
-  // };
   
   const getLotteryWinner = async () => {
     const { adminFacetInstance } = await getLotteryContract();
@@ -425,49 +407,9 @@ function App() {
       console.error('AdminFacet contract is not set');
     }
   };
-  
 
-  /* const withdrawRefund = async() => {
-    const { lottery_no } = ticketQuery;
-    const { sticket_no } = ticketQuery;
-    const { adminFacetInstance } = await getLotteryContract();
-    console.log(sticket_no);
-    await getIthPurchasedTicketTx(ethers.BigNumber.from(sticket_no).toNumber()+1);  
-    const lot_info = await getLotteryInfo(lottery_no); // Pass lottery_no to get lottery info
-    var quantity = (ticketData[1].toNumber());
-    const ticket_price = (lot_info[4].div(ethers.BigNumber.from("1000000000000000000"))).toNumber();
 
-     try {
-    
-      if (!account) {
-        console.error('Account is not set');
-        return;
-      }
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner(account); // Use the account's signer
-      
-      const tokenAbi = [
-        // Minimal ABI to call mint and burn
-        "function mint(address to, uint256 amount) public",
-        "function burn(uint256 amount) public"
-
-    ];
-    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenAbi, signer);
-
-    const amount = ethers.utils.parseUnits((quantity*ticket_price).toString(), 18); 
-
-    // TODO: CALL THE REFUND IN SOLIDITY BEFORE THE TRANSFERS
-    const tx = await tokenContract.mint(account, amount);
-    await tx.wait(); // Wait for transaction confirmation
-
-    const tx2 = await tokenContract.burn(DIAMOND_address, amount);
-    await tx2.wait(); // Wait for transaction confirmation
-  } catch (error){
-    console.error("Failed to withdraw refund", error);
-  }
-  } */
-
-  // Function to withdraw the refund for a user
+  // Function to withdraw the refund for a user when a lottery has been cancelled
   const withdrawRefund = async() => {
     const { lottery_no } = ticketQuery;
     const { sticket_no } = ticketQuery;
@@ -563,7 +505,7 @@ function App() {
 
       adminFacetInstance.on("TicketPurchased", (lotteryNo, sticketno, buyer, quantity) => {
         setLotteryNo(lotteryNo);
-        setSticketNo(sticketno-quantity);
+        setSticketNo(sticketno);
         setBuyer(buyer);
         setQuantity(quantity);
       });
