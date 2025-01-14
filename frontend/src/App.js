@@ -6,7 +6,7 @@ import './App.css';
 import { ethers } from 'ethers';
 
 /* global BigInt
- */// Import ABIs
+/* Import contract ABIs */
 import AdminFacetABI from './ABIs/AdminFacet.json';
 import LotteryFacetABI from './ABIs/LotteryFacet.json';
 import QueryFacetABI from './ABIs/QueryFacet.json';
@@ -20,16 +20,19 @@ const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0xfD6E07Ada020e09aADa1186285D367F58d1ADae4';
-let TOKEN_ADDRESS = '0xb9eACAB6AB61dbcA9534FcEC65Ef136FE351233B';
+const DIAMOND_address = '0xfD6E07Ada020e09aADa1186285D367F58d1ADae4';  // Address of the deployed Diamond contract
+let TOKEN_ADDRESS = '0xb9eACAB6AB61dbcA9534FcEC65Ef136FE351233B';      // Example payment token address
  
 
 function App() {
+  // State variables for Web3, contract instances, user account, and contract data
   const [web3, setWeb3] = useState(null);
   const [adminFacet, setAdminFacet] = useState(null);
   const [lotteryFacet, setLotteryFacet] = useState(null);
   const [queryFacet, setQueryFacet] = useState(null);
   const [account, setAccount] = useState(null);
+  
+  // State for various UI data and inputs
   const [adminData, setAdminData] = useState(null);
   const [lotteryWinner, setLotteryWinner] = useState(null);
   const [ticketData, setTicketData] = useState(null);
@@ -45,6 +48,7 @@ function App() {
   const [buyer, setBuyer] = useState(null);
   const [quantity, setQuantity] = useState(null);
 
+  // State for handling user input forms
   const [ticket, setTicket] = useState({
     lottery_no: '',
     quantity: '',
@@ -61,9 +65,9 @@ function App() {
     url: ''
   });
 
+  // State for toggling visibility of sections in UI
   const [tokenAddress, setTokenAddress] = useState('');
   const [ticketQuery, setTicketQuery] = useState({ i: '', lottery_no: '' , rand: 0, sticket_no: 0});
-
   const [showCreateLottery, setShowCreateLottery] = useState(false);
   const [showSetPaymentToken, setShowSetPaymentToken] = useState(false);
   const [showEnterLottery, setShowEnterLottery] = useState(false);
@@ -103,17 +107,23 @@ function App() {
   });
   const [winningTicketResult, setWinningTicketResult] = useState(null);
   const [winningTicketError, setWinningTicketError] = useState(null);
+  const [purchasedTicketParams, setPurchasedTicketParams] = useState({
+    lottery_no: '',
+    i: ''
+  });
+  const [purchasedTicketResult, setPurchasedTicketResult] = useState(null);
+  const [purchasedTicketError, setPurchasedTicketError] = useState(null);
     
-
+  // Fetch the lottery contract instance and connect with the current account
   const getLotteryContract = async () => {
     if (!window.ethereum) throw new Error("Metamask is not installed");
 
     try {
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       console.log("Connected account:", accounts[0]);
-  } catch (error) {
+    } catch (error) {
       console.error("Error connecting to MetaMask:", error);
-  }
+    }
 
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
@@ -121,11 +131,12 @@ function App() {
     // Await the network validation to ensure it's on the correct network
     const network = await provider.getNetwork();
    
+    // Fetch the AdminFacet instance of the Diamond contract
     const adminFacetInstance=  new ethers.Contract(DIAMOND_address, Main_Facet_ABI, signer);
 
     setAdminFacet(adminFacetInstance);
     const userAddress = await signer.getAddress();
-        setAccount(userAddress);
+    setAccount(userAddress);
 
     console.log('AdminFacet:', adminFacetInstance);
 
@@ -133,6 +144,7 @@ function App() {
 
   };
 
+  // Load the contract and token instances on component mount
   useEffect(() => {
     getLotteryContract();
   }
@@ -149,12 +161,14 @@ function App() {
       setTokenContract(tokenInstance);
     }
   }, [TOKEN_ADDRESS]);
-  // Functions to interact with the contracts
+  
+  // Function to create a lottery with specified parameters
   const createLottery = async () => {
-    const {adminFacetInstance} = await getLotteryContract();
+    const { adminFacetInstance } = await getLotteryContract();
 
-    if (adminFacet ) {
+    if (adminFacet) {
       try {
+        // Convert input parameters to the correct formats
         const unixEnd = BigInt(lotteryParams.unixEnd); // Directly convert to BigInt
         const nooftickets = parseInt(lotteryParams.nooftickets); // Convert to integer
         const noofwinners = parseInt(lotteryParams.noofwinners); // Convert to integer
@@ -165,6 +179,7 @@ function App() {
 
         console.log("admin facet:", adminFacetInstance);
 
+        // Send transaction to create a lottery
         const tx = await adminFacetInstance.createLottery(
             unixEnd,
             nooftickets,
@@ -178,7 +193,7 @@ function App() {
         console.log("Transaction sent, waiting for confirmation...");
         adminFacetInstance.on("LotteryCreated", (lottery_no) => {
           console.log("Lottery Created with No:", lottery_no.toString());
-          setLotteryNo(lottery_no.toString()); // Update state with the lottery_no
+          setLotteryNo(lottery_no.toString());   // Update state with the lottery_no
         });
 
         await tx.wait();
@@ -192,21 +207,24 @@ function App() {
       console.error('AdminFacet contract or account is not set');
     }
   };
+
+  // Function to get lottery information
   const getLotteryInfo = async (lottery_no) => {
-    const {adminFacetInstance} = await getLotteryContract();
+    const { adminFacetInstance } = await getLotteryContract();
 
     if (adminFacetInstance) {
       try {
         console.log(`Fetching lottery info for lottery ${lottery_no}...`);
         const result = await adminFacetInstance.getLotteryInfo(lottery_no);
 
+        // Format the results for better readability
         const formattedResult = {
-        startTime: result[0].toString(), // Convert BigNumber to string
-        totalTickets: result[1].toString(), // Convert BigNumber to string
-        winnersCount: result[2].toString(), // Convert BigNumber to string
-        minPercentage: result[3].toString(), // Convert BigNumber to string
-        ticketPrice: ethers.utils.formatEther(result[4]) // Convert BigNumber to string
-      };
+          startTime: result[0].toString(), // Convert BigNumber to string
+          totalTickets: result[1].toString(), // Convert BigNumber to string
+          winnersCount: result[2].toString(), // Convert BigNumber to string
+          minPercentage: result[3].toString(), // Convert BigNumber to string
+          ticketPrice: ethers.utils.formatEther(result[4]) // Convert BigNumber to string
+        };
 
       setLotteryInfo(formattedResult);
         console.log('Lottery Info:', result);
@@ -219,11 +237,11 @@ function App() {
     }
   };
 
+  // Function to set the payment token for the lottery
   const setPaymentToken = async () => {
     if (adminFacet) {
       try {
         console.log('Setting payment token...');
-        
         const tx = await adminFacet.setPaymentToken(tokenAddress);
         console.log('Payment token set');
       } catch (error) {
@@ -234,14 +252,14 @@ function App() {
     }
   };
 
+  // Function to get the lottery URL
   const getLotteryURL = async () => {
     const { lottery_no } = ticketQuery;
-    const {adminFacetInstance} = await getLotteryContract();
+    const { adminFacetInstance } = await getLotteryContract();
     if (adminFacetInstance) {
       try {
         console.log(`Fetching lottery URL for lottery ${lottery_no}...`);
         const result = await adminFacetInstance.getLotteryURL(lottery_no);
-
         setLotteryURL(result[1]);
         console.log('Lottery URL:', result);
       } catch (error) {
@@ -252,9 +270,9 @@ function App() {
     }
   };
 
+  // Function to mint tokens to users so that we can try the app
   const mintTokens = async () => {
     try {
-
       if (!account) {
         console.error('Account is not set');
         return;
@@ -265,7 +283,7 @@ function App() {
       const tokenAbi = [
         // Minimal ABI to call mint
         "function mint(address to, uint256 amount) public"
-    ];
+      ];
     const tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenAbi, signer);
 
     const amount = ethers.utils.parseUnits("1000", 18); // Mint 1000 tokens with 18 decimals
@@ -293,6 +311,7 @@ function App() {
     }
   };
 
+  // Function to get the ticket sales
   const getLotterySales = async () => {
     const { lottery_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
@@ -311,10 +330,10 @@ function App() {
     }
   };
   
+  // Function to get the number of purchase transactions
   const getNumPurchaseTxs = async () => {
     const { lottery_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
-  
     if (adminFacetInstance) {
       try {
         console.log(`Fetching number of purchase transactions for lottery ${lottery_no}...`);
@@ -329,9 +348,9 @@ function App() {
     }
   };
   
+  // Function to get the payment token
   const getPaymentToken = async () => {
     const { adminFacetInstance } = await getLotteryContract();
-  
     if (adminFacetInstance) {
       try {
         console.log('Fetching payment token...');
@@ -346,10 +365,10 @@ function App() {
     }
   };
   
+  // Function to get the start time of the lottery
   const getStartTime = async () => {
     const { lottery_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
-  
     if (adminFacetInstance) {
       try {
         console.log(`Fetching start time for lottery ${lottery_no}...`);
@@ -364,6 +383,7 @@ function App() {
     }
   };
 
+  // Function to get a hash for the random number
   const getHashedRandom = async () => {
     const { random_n } = ticketQuery;
     if (account) {
@@ -372,27 +392,26 @@ function App() {
     }
   }
 
-  const getIthPurchasedTicketTx = async ( i ) => {
-    const { lottery_no } = ticketQuery;
-    const { adminFacetInstance } = await getLotteryContract();
-  
-    if (adminFacetInstance) {
-      try {
-        console.log(`Fetching ticket data for lottery ${lottery_no}, ticket ${i}...`);
-        const result = await adminFacetInstance.getIthPurchasedTicketTx(i, lottery_no);
-        setTicketData(result);
-        console.log('Ticket Data:', result);
-      } catch (error) {
-        console.error('Error fetching ticket data:', error);
-      }
-    } else {
-      console.error('AdminFacet contract is not set');
-    }
-  };
+  // Function to get the purchased ticket from index
+  // const getIthPurchasedTicketTx = async ( i ) => {
+  //   const { lottery_no } = ticketQuery;
+  //   const { adminFacetInstance } = await getLotteryContract();
+  //   if (adminFacetInstance) {
+  //     try {
+  //       console.log(`Fetching ticket data for lottery ${lottery_no}, ticket ${i}...`);
+  //       const result = await adminFacetInstance.getIthPurchasedTicketTx(i, lottery_no);
+  //       setTicketData(result);
+  //       console.log('Ticket Data:', result);
+  //     } catch (error) {
+  //       console.error('Error fetching ticket data:', error);
+  //     }
+  //   } else {
+  //     console.error('AdminFacet contract is not set');
+  //   }
+  // };
   
   const getLotteryWinner = async () => {
     const { adminFacetInstance } = await getLotteryContract();
-  
     if (adminFacetInstance) {
       try {
         console.log('Fetching lottery winner...');
@@ -448,6 +467,7 @@ function App() {
   }
   } */
 
+  // Function to withdraw the refund for a user
   const withdrawRefund = async() => {
     const { lottery_no } = ticketQuery;
     const { sticket_no } = ticketQuery;
@@ -466,22 +486,22 @@ function App() {
 
   }
 
+  // Function to withdraw the proceeds for owner
   const withdrawProceeds = async() => {
     const { lottery_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
     console.log(lottery_no);
     try{
       const tx = await adminFacetInstance.withdrawTicketProceeds(parseInt(lottery_no), { gasLimit: 5000000 });
-     tx.wait();
-
+      tx.wait();
       console.log("Refund Successful");
     }
     catch (error){
       console.error("Refund Failed", error);
     }
-
   }
 
+  // Input handlers
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setLotteryParams({ ...lotteryParams, [name]: value });
@@ -496,15 +516,17 @@ function App() {
     setTicketQuery(prevState => ({ ...prevState, [name]: value }));
     ;  };
   
+
+  // Function to buy a ticket
   const buyTicket = async () => {
     await getPaymentToken(); 
   
-    if (!TOKEN_ADDRESS) {
+    if (!TOKEN_ADDRESS) {  // Check if the token address is set
       console.error('TOKEN_ADDRESS is not set');
       return;
     }
   
-    if (!account) {
+    if (!account) {   // Check if the account is set
       console.error('Account is not set');
       return;
     }
@@ -529,9 +551,9 @@ function App() {
       const tokenInstance = new ethers.Contract(TOKEN_ADDRESS, ERC20ABI, signer);
   
       // Address of the recipient (contract or address to receive tokens)
-      const recipient = DIAMOND_address; // Replace with your recipient contract or address
+      const recipient = DIAMOND_address;
   
-      // Step 1: Approve the recipient to spend tokens on behalf of the account
+      // Approve the recipient to spend tokens on behalf of the account
       const approveTx = await tokenInstance.approve(recipient, amount);
       await approveTx.wait();
       console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);  
@@ -555,6 +577,7 @@ function App() {
     setTicketCheckParams({ ...ticketCheckParams, [name]: value });
   };
   
+  // Function to check if the user's ticket has won
   const checkIfMyTicketWon = async () => {
     const { lottery_no, ticketNo } = ticketCheckParams;
     const { adminFacetInstance } = await getLotteryContract();
@@ -577,33 +600,24 @@ function App() {
     setRevealParams({ ...revealParams, [name]: value });
   };
 
+  // Function to reveal the random number
   const revealRandomNumber = async () => {
     const { lottery_no, sticketno, quantity, rnd_number } = revealParams;
     const { adminFacetInstance } = await getLotteryContract();
   
     if (adminFacetInstance) {
-      // try {
-        console.log(`Revealing random number for lottery ${lottery_no}...`);
-        console.log("rnd_number JS:", parseInt(rnd_number), "Type:", typeof parseInt(rnd_number));
-      /*   const computedHash = ethers.utils.keccak256(
-          ethers.utils.defaultAbiCoder.encode(["address", "uint256"], [account, parseInt(rnd_number)])
-        ); */
-/*         console.log("Computed Hash:", computedHash);        
- */        const tx = await adminFacetInstance.revealRndNumberTx(
-          parseInt(lottery_no),
-          parseInt(sticketno),
-          parseInt(quantity),
-          parseInt(rnd_number),
-          { gasLimit: 10000000 }
-        );
-        await tx.wait();
-        console.log('Random number revealed successfully');
-        setRevealRndError(null); // Clear any previous error
-      // } catch (error) {
-      //   console.error('Error revealing random number:', error);
-      //   const errorMessage = error?.reason || error?.data?.message || 'An error occurred. Please check your inputs and try again.';
-      //   setRevealRndError(errorMessage);
-      // }
+      console.log(`Revealing random number for lottery ${lottery_no}...`);
+      console.log("rnd_number JS:", parseInt(rnd_number), "Type:", typeof parseInt(rnd_number));
+      const tx = await adminFacetInstance.revealRndNumberTx(
+        parseInt(lottery_no),
+        parseInt(sticketno),
+        parseInt(quantity),
+        parseInt(rnd_number),
+        { gasLimit: 10000000 }
+      );
+      await tx.wait();
+      console.log('Random number revealed successfully');
+      setRevealRndError(null); // Clear any previous error
     } else {
       console.error('AdminFacet contract or account is not set');
       setRevealRndError('AdminFacet contract or account is not set');
@@ -615,6 +629,7 @@ function App() {
     setCheckAddrParams({ ...checkAddrParams, [name]: value });
   };
 
+  // Function to check if the address's ticket has won
   const checkIfAddrTicketWon = async () => {
     const { addr, lottery_no, ticketNo } = checkAddrParams;
     const { adminFacetInstance } = await getLotteryContract();
@@ -646,6 +661,7 @@ function App() {
     setWinningTicketParams({ ...winningTicketParams, [name]: value });
   };
 
+  // Function to get the ith winning ticket
   const getIthWinningTicket = async () => {
     const { lottery_no, i } = winningTicketParams;
     const { adminFacetInstance } = await getLotteryContract();
@@ -671,6 +687,48 @@ function App() {
       setWinningTicketError('AdminFacet contract or account is not set');
     }
   };
+
+
+  const handlePurchasedTicketInputChange = (e) => {
+    const { name, value } = e.target;
+    setPurchasedTicketParams({ ...purchasedTicketParams, [name]: value });
+  };
+
+  // Function to get the ith winning ticket
+  const getIthPurchasedTicketTx = async () => {
+    const { lottery_no, i } = purchasedTicketParams;
+    const { adminFacetInstance } = await getLotteryContract();
+  
+    setPurchasedTicketError(null); // Reset the error state before making the call
+  
+    if (adminFacetInstance) {
+      try {
+        console.log(`Fetching the ${i}th purchased ticket for lottery ${lottery_no}...`);
+  
+        // Call the Solidity function
+        const result = await adminFacetInstance.getIthPurchasedTicketTx(
+          parseInt(i),
+          parseInt(lottery_no)
+        );
+  
+        // Extract the values from the result
+        const sticketno = result[0].toString();
+        const quantity = result[1].toString();
+  
+        // Update the state with the results
+        setPurchasedTicketResult({ sticketno, quantity });
+  
+        console.log('Purchased Ticket Result:', { sticketno, quantity });
+      } catch (error) {
+        console.error('Error fetching purchased ticket transaction:', error);
+        setPurchasedTicketError(error.message || 'An error occurred while fetching the purchased ticket.');
+      }
+    } else {
+      console.error('AdminFacet contract is not set');
+      setPurchasedTicketError('AdminFacet contract is not set');
+    }
+  };
+  
   
 
   return (
@@ -806,6 +864,34 @@ function App() {
           <h2>Mint Tokens</h2>
           <button onClick={mintTokens}>Don't have TT tokens? Mint 1000 Tokens</button>
 
+        </div>
+
+        <div>
+          <h2>Get Ith Purchased Ticket Transaction</h2>
+          <div>
+            <input
+              type="text"
+              name="lottery_no"
+              placeholder="Lottery Number"
+              value={purchasedTicketParams.lottery_no}
+              onChange={handlePurchasedTicketInputChange}
+            />
+            <input
+              type="text"
+              name="i"
+              placeholder="Index of Ticket"
+              value={purchasedTicketParams.i}
+              onChange={handlePurchasedTicketInputChange}
+            />
+            <button onClick={getIthPurchasedTicketTx}>Fetch Ticket Transaction</button>
+            {purchasedTicketResult && (
+              <div>
+                <p>Starting Ticket Number: {purchasedTicketResult.sticketno}</p>
+                <p>Quantity: {purchasedTicketResult.quantity}</p>
+              </div>
+            )}
+            {purchasedTicketError && <p style={{ color: 'red' }}>{purchasedTicketError}</p>}
+          </div>
         </div>
 
         <div>

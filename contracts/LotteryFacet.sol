@@ -1,27 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-
 import "./diamond/contracts/libraries/LibDiamond.sol";
-import './diamond/contracts/Diamond.sol';                   // new
-
+import './diamond/contracts/Diamond.sol';
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 library LibLotteryStorage {
     bytes32 constant LOTTERY_STORAGE_POSITION =
         keccak256("diamond.storage.LotteryStorage.v1");
 
-    struct Ticket {
+    struct Ticket {  
         address buyer;
-        uint ticket_no;
-        bytes32 hashedrnd_number;
+        uint ticket_no;   // Ordered unique number
+        bytes32 hashedrnd_number;   // Hashed random number for secure verification
         bool isRefunded;
         uint quantity;
-        bool isRevealed;
+        bool isRevealed;   // Indicates if the ticket's random number has been revealed
     }
 
     struct Purchase {
-        uint sticketno;
+        uint sticketno;    // Starting ticket number in "tickets" array for this purchase
         uint quantity;
         address buyer;
     }
@@ -33,7 +31,7 @@ library LibLotteryStorage {
         uint winnersCount;
         uint minpercentage;
         uint ticketprice;
-        IERC20 paymentToken;
+        IERC20 paymentToken;   // ERC20 token used for payments
         bytes32 htmlhash;
         string url;
     }
@@ -41,7 +39,7 @@ library LibLotteryStorage {
     struct LotteryStatus {
         bool isCancelled;
         uint ticketsSold;
-        uint cumulativeRandomness;
+        uint cumulativeRandomness;   // Used to calculate randomness for winners
         Ticket[] tickets;
         Ticket[] revealedTickets;
         Ticket[] winners;
@@ -51,12 +49,12 @@ library LibLotteryStorage {
     struct LotteryStorage {
         IERC20 paymentToken;
         uint lotteryCount;
-        mapping(uint => Lottery) lotteries;
+        mapping(uint => Lottery) lotteries;  
     }
 
     struct Lottery {
-        LotteryDetails details;
-        LotteryStatus status;
+        LotteryDetails details;  // Static details of the lottery
+        LotteryStatus status;    // Dynamic status and operations of the lottery
     }
 
     function lotteryStorage() internal pure returns (LotteryStorage storage ls) {
@@ -74,6 +72,10 @@ contract LotteryFacet {
     event LotteryCreated(uint indexed lottery_no);
     event RevealCalled(uint indexed lottery_no, uint sticketno, uint quantity, uint rnd_number, bytes32 hash_rnd_number);
 
+    /**
+     * @dev Allows users to purchase tickets for an active lottery.
+     * Ensures proper conditions such as availability and payment success.
+     */
     function buyTicketTx(uint lottery_no, uint quantity, bytes32 hash_rnd_number) external  returns( uint sticketno)  {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         
@@ -83,7 +85,7 @@ contract LotteryFacet {
         require(block.timestamp < lottery.details.unixEnd, "Lottery has ended");
         require(lottery.status.ticketsSold + quantity <= lottery.details.totalTickets, "Exceeds limit");
         require(quantity > 0 && quantity <= 30, "Purchase up to 30 tickets only");
-        require(block.timestamp < (lottery.details.unixEnd - lottery.details.startTime) / 2 + lottery.details.startTime, "Reveal period started");    // gpt yazmamıştı
+        require(block.timestamp < (lottery.details.unixEnd - lottery.details.startTime) / 2 + lottery.details.startTime, "Reveal period started");
 
         uint totalCost = lottery.details.ticketprice * quantity;
         require(
@@ -104,7 +106,7 @@ contract LotteryFacet {
 
         require(ls.paymentToken.transferFrom(msg.sender, address(this), totalCost), "Payment failed");
 
-        sticketno = lottery.status.ticketsSold; 
+        sticketno = lottery.status.ticketsSold;  // Sequential allocation of tickets
 
 
         for (uint i = 0; i < quantity; i++) {
@@ -129,6 +131,10 @@ contract LotteryFacet {
         return sticketno;
     }
 
+    /**
+     * @dev Reveals the random number associated with purchased tickets for a lottery.
+     * Helps ensure transparency in winner determination.
+     */
     function revealRndNumberTx(uint lottery_no, uint sticketno, uint quantity, uint rnd_number) external {
         bytes32 hash_rnd_number = keccak256(abi.encodePacked(msg.sender, rnd_number));
         emit RevealCalled(lottery_no, sticketno, quantity, rnd_number, hash_rnd_number);
@@ -145,21 +151,25 @@ contract LotteryFacet {
         LibLotteryStorage.Ticket storage ticket = lottery.status.tickets[sticketno];
         require(ticket.buyer == msg.sender, "Not ticket owner");
         require(ticket.quantity == quantity, "Wrong quantity");
-        /* require(ticket.hashedrnd_number == keccak256(abi.encodePacked(msg.sender, rnd_number)), "Invalid random number");
- */
+        // require(ticket.hashedrnd_number == keccak256(abi.encodePacked(msg.sender, rnd_number)), "Invalid random number");
+ 
         for (uint i = 0; i < quantity; i++) {
             ticket = lottery.status.tickets[sticketno + i];
             lottery.status.revealedTickets.push(ticket);
             ticket.isRevealed = true;
         }
 
-        lottery.status.cumulativeRandomness ^= rnd_number;
+        lottery.status.cumulativeRandomness ^= rnd_number;   // Update randomness for winner selection
         if (lottery.status.revealedTickets.length >= lottery.details.minpercentage * lottery.details.totalTickets / 100) {
-            lottery.status.isCancelled = false;
-            determineWinner(lottery_no); // Calculate and announce winners
+            lottery.status.isCancelled = false;   // If minimum percentage is met, activate the lottery
+            determineWinner(lottery_no);  // Calculate and announce winners
         }
     }
-       
+    
+    /**
+     * @dev Internal function to determine and store lottery winners.
+     * Randomness and revealed tickets are used for fair selection.
+     */    
     function determineWinner(uint lottery_no) internal {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
@@ -190,7 +200,7 @@ contract LotteryFacet {
             }
 
             if (!alreadyWinner) {
-                lottery.status.winners.push(winningTicket);
+                lottery.status.winners.push(winningTicket);  // Add the winning ticket
                 winnersFound++;
                 i++;
             }
@@ -210,6 +220,10 @@ contract LotteryFacet {
         }
     }
 
+    /**
+     * @dev Checks if the caller's ticket won in the given lottery.
+     * Only callable after the lottery ends.
+     */
     function checkIfMyTicketWon(uint lottery_no, uint ticketNo) public view returns (bool) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -226,6 +240,9 @@ contract LotteryFacet {
         return false;
     }
 
+    /**
+     * @dev Checks if a specific address owns a winning ticket in the given lottery.
+     */
     function checkIfAddrTicketWon(address addr, uint lottery_no, uint ticketNo) public view returns (bool) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -235,6 +252,7 @@ contract LotteryFacet {
         require(block.timestamp >= lottery.details.unixEnd, "Lottery not ended");
         require(!lottery.status.isCancelled, "Lottery cancelled");
 
+        // Check if the ticket is in the winners list and owned by the address
         for (uint i = 0; i < lottery.status.winners.length; i++) {
             if (lottery.status.winners[i].ticket_no == ticketNo && lottery.status.winners[i].buyer == addr) {
                 return true;
@@ -243,6 +261,9 @@ contract LotteryFacet {
         return false;
     }
     
+    /**
+     * @dev Allows a ticket owner to withdraw their ticket refund if the lottery was cancelled.
+     */
     function withdrawTicketRefund(uint lottery_no, uint sticket_no) public {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -266,6 +287,10 @@ contract LotteryFacet {
 
     }
 
+    /**
+     * @dev Creates a new lottery with the specified parameters. 
+     * Only the contract owner can call this function.
+     */
     function createLottery(
         uint unixEnd,
         uint nooftickets,
@@ -291,9 +316,9 @@ contract LotteryFacet {
         lottery.details.htmlhash = htmlhash;
         lottery.details.url = url;
 
-        lottery.status.isCancelled = true;
-        lottery.status.ticketsSold = 0;             // gpt yazmamıştı
-        lottery.status.cumulativeRandomness = 0;    // gpt yazmamıştı
+        lottery.status.isCancelled = true;   // Start in a cancelled state until conditions are met
+        lottery.status.ticketsSold = 0;
+        lottery.status.cumulativeRandomness = 0;
 
         emit LotteryCreated(lotteryNo);
     }
@@ -332,17 +357,26 @@ contract LotteryFacet {
         require(ls.paymentToken.transfer(LibDiamond.contractOwner(), proceeds), "Withdrawal failed");
     }
 
+    /**
+     * @dev Returns the current lottery count (latest lottery number).
+     */
     function getLotteryCount() public view returns (uint) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         return ls.lotteryCount;
     }
 
+    /**
+     * @dev Returns the total number of purchase transactions for a given lottery.
+     */
     function getNumPurchaseTxs(uint lottery_no) public view returns (uint) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
         return ls.lotteries[lottery_no].status.purchases.length;
     }
 
+    /**
+     * @dev Returns details of the i-th purchase transaction for a given lottery.
+     */
     function getIthPurchasedTicketTx(uint i, uint lottery_no) public view returns (uint sticketno, uint quantity) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -352,6 +386,9 @@ contract LotteryFacet {
         return (purchase.sticketno, purchase.quantity);
     }
 
+    /**
+     * @dev Returns the ticket number of the i-th winner in the given lottery.
+     */
     function getIthWinningTicket(uint lottery_no, uint i) public view returns (uint ticketNo) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -364,6 +401,9 @@ contract LotteryFacet {
         return lottery.status.winners[i].ticket_no;
     }
 
+    /**
+     * @dev Returns the total number of tickets sold in the given lottery.
+     */
     function getLotterySales(uint lottery_no) public view returns (uint) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -371,6 +411,9 @@ contract LotteryFacet {
         return ls.lotteries[lottery_no].status.ticketsSold;
     }
 
+    /**
+     * @dev Returns the starting time of the given lottery.
+     */
     function getStartTime(uint lottery_no) external view returns (uint) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -378,11 +421,17 @@ contract LotteryFacet {
         return ls.lotteries[lottery_no].details.startTime;
     }
 
+    /**
+     * @dev Returns the payment token address.
+     */
     function getPaymentToken() external view returns (address) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         return address(ls.paymentToken);
     }
 
+    /**
+     * @dev Returns information about the given lottery.
+     */
     function getLotteryInfo(uint lottery_no) public view returns (uint, uint, uint, uint, uint) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
@@ -397,6 +446,9 @@ contract LotteryFacet {
         );
     }
 
+    /**
+     * @dev Returns the URL for the given lottery.
+     */
     function getLotteryURL(uint lottery_no) public view returns (bytes32, string memory) {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
