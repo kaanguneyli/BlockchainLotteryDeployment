@@ -466,6 +466,21 @@ function App() {
 
   }
 
+  const withdrawProceeds = async() => {
+    const { lottery_no } = ticketQuery;
+    const { adminFacetInstance } = await getLotteryContract();
+    console.log(lottery_no);
+    try{
+      const tx = await adminFacetInstance.withdrawTicketProceeds(parseInt(lottery_no), { gasLimit: 5000000 });
+     tx.wait();
+
+      console.log("Refund Successful");
+    }
+    catch (error){
+      console.error("Refund Failed", error);
+    }
+
+  }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -898,6 +913,14 @@ function App() {
             </div>
         </div>
 
+
+        <div>
+          <h2> withdraw Proceeds</h2>
+          <div>
+            <input type="text" name="lottery_no" placeholder="Lottery Number" value={ticketQuery.lottery_no} onChange={handleTicketQueryChange} />
+            <button onClick={withdrawProceeds}>Submit</button>
+            </div>
+        </div>
 
 
         <div>
