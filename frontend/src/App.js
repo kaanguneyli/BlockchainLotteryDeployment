@@ -21,7 +21,7 @@ const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
 const DIAMOND_address = '0xCc9955B14A7A96835617397B1b99705Fa7313504';
-let TOKEN_ADDRESS = '0x658715e78DB4c0bc82780740eC1bcC9734F8D56D';
+let TOKEN_ADDRESS = '0x716f95C893E1540C7DC976cC95a15C96Bec55eA5';
  
 
 function App() {
@@ -408,7 +408,7 @@ function App() {
   };
   
 
-  const withdrawRefund = async() => {
+  /* const withdrawRefund = async() => {
     const { lottery_no } = ticketQuery;
     const { sticket_no } = ticketQuery;
     const { adminFacetInstance } = await getLotteryContract();
@@ -446,7 +446,26 @@ function App() {
   } catch (error){
     console.error("Failed to withdraw refund", error);
   }
+  } */
+
+  const withdrawRefund = async() => {
+    const { lottery_no } = ticketQuery;
+    const { sticket_no } = ticketQuery;
+    const { adminFacetInstance } = await getLotteryContract();
+    console.log(sticket_no);
+    console.log(lottery_no);
+    try{
+      const tx = await adminFacetInstance.withdrawTicketRefund(parseInt(lottery_no), parseInt(sticket_no), { gasLimit: 5000000 });
+     tx.wait();
+
+      console.log("Refund Successful");
+    }
+    catch (error){
+      console.error("Refund Failed", error);
+    }
+
   }
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
