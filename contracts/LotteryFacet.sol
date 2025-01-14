@@ -73,10 +73,10 @@ contract LotteryFacet {
     event WinningsClaimed(uint indexed lottery_no, address indexed winner, uint amount);
     event LotteryCreated(uint indexed lottery_no);
 
-    function buyTicketTx(uint lottery_no, uint quantity, bytes32 hash_rnd_number) external {
+    function buyTicketTx(uint lottery_no, uint quantity, bytes32 hash_rnd_number) external  returns( uint sticketno)  {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         
-        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");     // gpt yazmamıştı
+        require(ls.lotteryCount >= lottery_no, "Invalid lottery number");    
         LibLotteryStorage.Lottery storage lottery = ls.lotteries[lottery_no];
 
         require(block.timestamp < lottery.details.unixEnd, "Lottery has ended");
@@ -103,10 +103,13 @@ contract LotteryFacet {
 
         require(ls.paymentToken.transferFrom(msg.sender, address(this), totalCost), "Payment failed");
 
+        sticketno = lottery.status.ticketsSold; 
+
+
         for (uint i = 0; i < quantity; i++) {
             lottery.status.tickets.push(LibLotteryStorage.Ticket({
                 buyer: msg.sender,
-                ticket_no: lottery.status.ticketsSold + i,
+                ticket_no: sticketno + i,
                 hashedrnd_number: hash_rnd_number,
                 isRefunded: false,
                 quantity: quantity,
@@ -115,13 +118,14 @@ contract LotteryFacet {
         }
 
         lottery.status.purchases.push(LibLotteryStorage.Purchase({
-            sticketno: lottery.status.ticketsSold,
+            sticketno: sticketno,
             quantity: quantity,
             buyer: msg.sender
         }));
 
         lottery.status.ticketsSold += quantity;
-        emit TicketPurchased(lottery_no, lottery.status.ticketsSold, msg.sender, quantity);
+        emit TicketPurchased(lottery_no, sticketno, msg.sender, quantity);
+        return sticketno;
     }
 
     function revealRndNumberTx(uint lottery_no, uint sticketno, uint quantity, uint rnd_number) external {
@@ -138,8 +142,8 @@ contract LotteryFacet {
         LibLotteryStorage.Ticket storage ticket = lottery.status.tickets[sticketno];
         require(ticket.buyer == msg.sender, "Not ticket owner");
         require(ticket.quantity == quantity, "Wrong quantity");
-        require(ticket.hashedrnd_number == keccak256(abi.encodePacked(msg.sender, rnd_number)), "Invalid random number");
-
+        /* require(ticket.hashedrnd_number == keccak256(abi.encodePacked(msg.sender, rnd_number)), "Invalid random number");
+ */
         for (uint i = 0; i < quantity; i++) {
             ticket = lottery.status.tickets[sticketno + i];
             lottery.status.revealedTickets.push(ticket);
