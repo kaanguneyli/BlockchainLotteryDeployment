@@ -72,6 +72,7 @@ contract LotteryFacet {
     event WinnersAnnounced(uint indexed lottery_no, uint winningTicket);
     event WinningsClaimed(uint indexed lottery_no, address indexed winner, uint amount);
     event LotteryCreated(uint indexed lottery_no);
+    event RevealCalled(uint indexed lottery_no, uint sticketno, uint quantity, uint rnd_number, bytes32 hash_rnd_number);
 
     function buyTicketTx(uint lottery_no, uint quantity, bytes32 hash_rnd_number) external  returns( uint sticketno)  {
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
@@ -129,6 +130,8 @@ contract LotteryFacet {
     }
 
     function revealRndNumberTx(uint lottery_no, uint sticketno, uint quantity, uint rnd_number) external {
+        bytes32 hash_rnd_number = keccak256(abi.encodePacked(msg.sender, rnd_number));
+        emit RevealCalled(lottery_no, sticketno, quantity, rnd_number, hash_rnd_number);
         LibLotteryStorage.LotteryStorage storage ls = LibLotteryStorage.lotteryStorage();
         require(ls.lotteryCount >= lottery_no, "Invalid lottery number");
 
