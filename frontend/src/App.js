@@ -20,8 +20,8 @@ const QUERY_FACET_ADDRESS = '0xa513e6e4b8f2a923d98304ec87f64353c4d5c853';
 const ADMIN_FACET_ADDRESS = '0x5fc8d32690cc91d4c39d9d3abcbd16989f875707';
  */
 
-const DIAMOND_address = '0x03Ba40c20d2F6fB49372c9943E465525D3946F53';
-let TOKEN_ADDRESS = '0x7F3eDb6A597D2C60083B0d5ffD836c46e4D86823';
+const DIAMOND_address = '0xCc9955B14A7A96835617397B1b99705Fa7313504';
+let TOKEN_ADDRESS = '0x658715e78DB4c0bc82780740eC1bcC9734F8D56D';
  
 
 function App() {
@@ -501,7 +501,10 @@ function App() {
       const approveTx = await tokenInstance.approve(recipient, amount);
       await approveTx.wait();
       console.log(`Approved ${ethers.utils.formatEther(amount)} tokens for recipient: ${recipient}`);  
-      await adminFacetInstance.buyTicketTx(parseInt(lottery_no),parseInt(quantity),  random_number, { gasLimit: 5000000 });
+      const result = await adminFacetInstance.buyTicketTx(parseInt(lottery_no),parseInt(quantity),  random_number, { gasLimit: 5000000 });
+      console.log('Ticket purchased successfully');
+      console.log('Ticket Purchase Result:', result);
+
       adminFacetInstance.on("TicketPurchased", (lotteryNo, sticketno, buyer, quantity) => {
         setLotteryNo(lotteryNo);
         setSticketNo(sticketno-quantity);
@@ -548,11 +551,11 @@ function App() {
       // try {
         console.log(`Revealing random number for lottery ${lottery_no}...`);
         console.log("rnd_number JS:", parseInt(rnd_number), "Type:", typeof parseInt(rnd_number));
-        const computedHash = ethers.utils.keccak256(
+      /*   const computedHash = ethers.utils.keccak256(
           ethers.utils.defaultAbiCoder.encode(["address", "uint256"], [account, parseInt(rnd_number)])
-        );
-        console.log("Computed Hash:", computedHash);        
-        const tx = await adminFacetInstance.revealRndNumberTx(
+        ); */
+/*         console.log("Computed Hash:", computedHash);        
+ */        const tx = await adminFacetInstance.revealRndNumberTx(
           parseInt(lottery_no),
           parseInt(sticketno),
           parseInt(quantity),
@@ -680,11 +683,11 @@ function App() {
           )}
           {lotteryInfo && (
               <div>
-                <p>Start Time: {lotteryInfo.startTime}</p>
+                <p>Start Time: {lotteryInfo.startTime}</p>  
                 <p>Total Tickets: {lotteryInfo.totalTickets}</p>
                 <p>Winners Count: {lotteryInfo.winnersCount}</p>
                 <p>Minimum Percentage: {lotteryInfo.minPercentage}</p>
-                <p>Ticket Price: {lotteryInfo.ticketPrice} ETH</p>
+                <p>Ticket Price: {lotteryInfo.ticketPrice} TT</p>
               </div>
             )}
         </div>
