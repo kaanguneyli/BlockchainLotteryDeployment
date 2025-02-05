@@ -22,3 +22,5 @@ npx hardhat run scripts/deploy.js --network localhost
 ```
 
 Then you need to get the addresses of the facets from the node and paste it to the frontend. 
+
+Main repository for this project is `serhan-testo`
